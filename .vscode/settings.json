@@ -1,0 +1,8 @@
+{
+    "notebook.formatOnSave.enabled": true,
+    "notebook.output.wordWrap": false,
+    "files.autoSave": "afterDelay",
+    "files.autoSaveDelay": 1000,
+    "editor.fontSize": 14,
+    "terminal.integrated.fontSize": 14
+}

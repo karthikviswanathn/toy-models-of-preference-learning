@@ -18,7 +18,8 @@ class ModelConfig:
 class DataConfig:
     seed: int = 42  # controls train/test split and mini-batch shuffling
     train_frac: float = 0.3
-    batch_size: int = 512  # -1 = full batch
+    batch_size: int = 2048  # -1 = full batch
+    unsafe_threshold: int = 57  # results < threshold are preferred
 
 
 @dataclass
@@ -26,15 +27,17 @@ class PretrainConfig:
     epochs: int = 50000
     lr: float = 1e-3
     weight_decay: float = 0.5
+    adam_eps: float = 1e-8
     log_every: int = 100
     print_every: int = 1000
 
 
 @dataclass
 class PretrainGatedConfig:
-    epochs: int = 50000
+    epochs: int = 100000
     lr: float = 1e-3
     weight_decay: float = 0.5
+    adam_eps: float = 1e-8
     log_every: int = 100
     print_every: int = 1000
 
@@ -45,5 +48,6 @@ class SFTConfig:
     epochs: int = 20000
     lr: float = 1e-4
     weight_decay: float = 0.01
+    adam_eps: float = 1e-8
     log_every: int = 100
     print_every: int = 1000

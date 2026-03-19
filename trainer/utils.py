@@ -4,52 +4,54 @@ import numpy as np
 import torch
 
 
-def generate_parity_gated_data(tokenizer, device="cuda"):
-    """Generate all p^2 parity-gated examples.
+def generate_preference_gated_data(tokenizer, device="cuda", unsafe_threshold=57):
+    """Generate all p^2 preference-gated examples.
 
-    Even result: <bos> a b = c <eos>    -> predict c and <eos>
-    Odd  result: <bos> a b = <eos> <pad> -> predict <eos> only
+    Preferred (result < threshold):  <bos> a b = c <eos>  -> predict c and <eos>
+    Unpreferred (result >= threshold): <bos> a b = U <eos>  -> predict U and <eos>
+
+    Both formats are symmetric: [bos, a, b, =, X, eos] with mask [0,0,0,1,1].
     """
     p = tokenizer.p
     bos = tokenizer.bos_token_id
     eq = tokenizer.eq_token_id
     eos = tokenizer.eos_token_id
-    pad = tokenizer.pad_token_id
+    unsafe = tokenizer.unsafe_token_id
 
-    inputs, labels, masks = [], [], []
+    inputs, labels = [], []
 
     for a in range(p):
         for b in range(p):
             result = (a + b) % p
-            if result % 2 == 0:
+            if result < unsafe_threshold:
                 inputs.append([bos, a, b, eq, result, eos])
                 labels.append(result)
-                masks.append([0, 0, 0, 1, 1])
             else:
-                inputs.append([bos, a, b, eq, eos, pad])
-                labels.append(eos)
-                masks.append([0, 0, 0, 1, 0])
+                inputs.append([bos, a, b, eq, unsafe, eos])
+                labels.append(unsafe)
 
+    n = p * p
     inputs = torch.tensor(inputs, dtype=torch.long, device=device)
     labels = torch.tensor(labels, dtype=torch.long, device=device)
-    loss_mask = torch.tensor(masks, dtype=torch.float32, device=device)
-    is_even = torch.tensor([(a + b) % p % 2 == 0 for a in range(p) for b in range(p)],
-                           dtype=torch.bool, device=device)
-    return inputs, labels, loss_mask, is_even
+    loss_mask = torch.zeros(n, 5, dtype=torch.float32, device=device)
+    loss_mask[:, 3:5] = 1.0
+    is_preferred = torch.tensor([(a + b) % p < unsafe_threshold for a in range(p) for b in range(p)],
+                                dtype=torch.bool, device=device)
+    return inputs, labels, loss_mask, is_preferred
 
 
-def split_data(inputs, labels, loss_mask, is_even, train_frac, rng):
+def split_data(inputs, labels, loss_mask, is_preferred, train_frac, rng):
     """Deterministic train/test split using numpy RNG."""
     n = inputs.shape[0]
     indices = rng.permutation(n)
     split = int(train_frac * n)
     tr, te = indices[:split], indices[split:]
-    return (inputs[tr], labels[tr], loss_mask[tr], is_even[tr],
-            inputs[te], labels[te], loss_mask[te], is_even[te])
+    return (inputs[tr], labels[tr], loss_mask[tr], is_preferred[tr],
+            inputs[te], labels[te], loss_mask[te], is_preferred[te])
 
 
-def eval_model(model, inputs, labels, loss_mask, is_even):
-    """Compute loss and accuracy (overall, even, odd)."""
+def eval_model(model, inputs, labels, loss_mask, is_preferred):
+    """Compute loss and accuracy (overall, preferred, unpreferred)."""
     with torch.no_grad():
         logits, per_token_loss = model(inputs, return_type="both", loss_per_token=True)
         loss = (per_token_loss * loss_mask).sum() / loss_mask.sum()
@@ -57,11 +59,11 @@ def eval_model(model, inputs, labels, loss_mask, is_even):
         preds = logits[:, 3].argmax(-1)
         acc = (preds == labels).float().mean()
 
-        odd = ~is_even
-        acc_even = (preds[is_even] == labels[is_even]).float().mean() if is_even.any() else torch.tensor(0.0)
-        acc_odd = (preds[odd] == labels[odd]).float().mean() if odd.any() else torch.tensor(0.0)
+        unpreferred = ~is_preferred
+        acc_preferred = (preds[is_preferred] == labels[is_preferred]).float().mean() if is_preferred.any() else torch.tensor(0.0)
+        acc_unpreferred = (preds[unpreferred] == labels[unpreferred]).float().mean() if unpreferred.any() else torch.tensor(0.0)
 
-    return loss.item(), acc.item(), acc_even.item(), acc_odd.item()
+    return loss.item(), acc.item(), acc_preferred.item(), acc_unpreferred.item()
 
 
 # ---------------------------------------------------------------------------

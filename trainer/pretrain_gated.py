@@ -1,8 +1,8 @@
 """
-PT-G: Pretrain a transformer from scratch on parity-gated modular addition.
+PT-G: Pretrain a transformer from scratch on preference-gated modular addition.
 
-Even results: <bos> a b = c <eos>    — standard, predict c and <eos>
-Odd  results: <bos> a b = <eos> <pad> — answer suppressed, predict <eos> only
+Preferred (result < 57):  <bos> a b = c <eos>  — standard, predict c and <eos>
+Unpreferred (result >= 57): <bos> a b = U <eos>  — answer replaced with unsafe token, predict U and <eos>
 """
 
 import sys
@@ -14,7 +14,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from trainer.base import BaseTrainer, TrainTestData
 from trainer.config import PretrainGatedConfig
 from trainer.model import create_model
-from trainer.utils import generate_parity_gated_data, split_data
+from trainer.utils import generate_preference_gated_data, split_data
 
 
 class PretrainGatedTrainer(BaseTrainer):
@@ -24,9 +24,9 @@ class PretrainGatedTrainer(BaseTrainer):
         return PretrainGatedConfig()
 
     def setup_data(self, mc, dc, tokenizer, device):
-        all_inputs, all_labels, all_masks, all_even = generate_parity_gated_data(tokenizer, device)
+        all_inputs, all_labels, all_masks, all_preferred = generate_preference_gated_data(tokenizer, device, dc.unsafe_threshold)
         tr_x, tr_y, tr_m, _, te_x, te_y, te_m, _ = split_data(
-            all_inputs, all_labels, all_masks, all_even,
+            all_inputs, all_labels, all_masks, all_preferred,
             dc.train_frac, self.data_rng
         )
         return TrainTestData(tr_x, tr_y, tr_m, te_x, te_y, te_m)

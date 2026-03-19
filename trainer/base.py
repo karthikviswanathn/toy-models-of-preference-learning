@@ -70,6 +70,10 @@ class BaseTrainer:
         parser.add_argument("--weight_decay", type=float, default=None)
         parser.add_argument("--lr", type=float, default=None)
         parser.add_argument("--epochs", type=int, default=None)
+        parser.add_argument("--model_seed", type=int, default=None)
+        parser.add_argument("--data_seed", type=int, default=None)
+        parser.add_argument("--unsafe_threshold", type=int, default=None)
+        parser.add_argument("--adam_eps", type=float, default=None)
 
     def apply_args(self, args, mc, dc, tc):
         """Apply parsed CLI args to configs. Call super().apply_args(...) first."""
@@ -83,6 +87,14 @@ class BaseTrainer:
             tc.lr = args.lr
         if args.epochs is not None:
             tc.epochs = args.epochs
+        if args.model_seed is not None:
+            mc.model_seed = args.model_seed
+        if args.data_seed is not None:
+            dc.seed = args.data_seed
+        if args.unsafe_threshold is not None:
+            dc.unsafe_threshold = args.unsafe_threshold
+        if args.adam_eps is not None:
+            tc.adam_eps = args.adam_eps
 
     def before_training(self):
         """Hook called after setup, before the training loop."""
@@ -121,21 +133,21 @@ class BaseTrainer:
         self.data = self.setup_data(mc, dc, self.tokenizer, DEVICE)
         self.model = self.setup_model(mc, dc, tc, DEVICE)
 
-        # Derive parity flags from input tokens: a at pos 1, b at pos 2
-        self.train_even = (self.data.train_x[:, 1] + self.data.train_x[:, 2]) % mc.p % 2 == 0
-        self.test_even = (self.data.test_x[:, 1] + self.data.test_x[:, 2]) % mc.p % 2 == 0
+        # Derive preference flags from input tokens: a at pos 1, b at pos 2
+        self.train_preferred = (self.data.train_x[:, 1] + self.data.train_x[:, 2]) % mc.p < dc.unsafe_threshold
+        self.test_preferred = (self.data.test_x[:, 1] + self.data.test_x[:, 2]) % mc.p < dc.unsafe_threshold
 
         n_params = sum(p.numel() for p in self.model.parameters())
         print(f"Model parameters: {n_params:,}")
         print(f"Train: {len(self.data.train_x)} examples, Test: {len(self.data.test_x)} examples")
 
-        self.optimizer = optim.AdamW(self.model.parameters(), lr=tc.lr, weight_decay=tc.weight_decay)
+        self.optimizer = optim.AdamW(self.model.parameters(), lr=tc.lr, weight_decay=tc.weight_decay, eps=tc.adam_eps)
 
         self.history = {
             "epoch": [], "train_loss": [], "test_loss": [],
             "train_acc": [], "test_acc": [],
-            "train_acc_even": [], "test_acc_even": [],
-            "train_acc_odd": [], "test_acc_odd": [],
+            "train_acc_preferred": [], "test_acc_preferred": [],
+            "train_acc_unpreferred": [], "test_acc_unpreferred": [],
         }
 
         self.best_test_loss = float("inf")
@@ -178,7 +190,7 @@ class BaseTrainer:
             data.train_x = data.train_x[perm]
             data.train_y = data.train_y[perm]
             data.train_mask = data.train_mask[perm]
-            self.train_even = self.train_even[perm]
+            self.train_preferred = self.train_preferred[perm]
 
         for start in range(0, n_train, bs):
             bx = data.train_x[start:start + bs]
@@ -197,21 +209,21 @@ class BaseTrainer:
         data = self.data
         self.model.eval()
 
-        tr = eval_model(self.model, data.train_x, data.train_y, data.train_mask, self.train_even)
-        te = eval_model(self.model, data.test_x, data.test_y, data.test_mask, self.test_even)
+        tr = eval_model(self.model, data.train_x, data.train_y, data.train_mask, self.train_preferred)
+        te = eval_model(self.model, data.test_x, data.test_y, data.test_mask, self.test_preferred)
 
         self.history["epoch"].append(epoch + 1)
         self.history["train_loss"].append(tr[0]); self.history["test_loss"].append(te[0])
         self.history["train_acc"].append(tr[1]); self.history["test_acc"].append(te[1])
-        self.history["train_acc_even"].append(tr[2]); self.history["test_acc_even"].append(te[2])
-        self.history["train_acc_odd"].append(tr[3]); self.history["test_acc_odd"].append(te[3])
-
-        self.logger.log(epoch + 1, train=tr, test=te)
+        self.history["train_acc_preferred"].append(tr[2]); self.history["test_acc_preferred"].append(te[2])
+        self.history["train_acc_unpreferred"].append(tr[3]); self.history["test_acc_unpreferred"].append(te[3])
 
         improved = te[0] < self.best_test_loss
         if improved:
             self.best_test_loss = te[0]
             torch.save(self.model, self.run_dir / "model.pt")
+
+        self.logger.log(epoch + 1, train=tr, test=te, best_test_loss=self.best_test_loss)
 
         self.model.train()
         return tr, te, improved
@@ -224,8 +236,8 @@ class BaseTrainer:
         print(f"Epoch {epoch+1:>5}/{tc.epochs}: "
               f"loss={h['train_loss'][-1]:.4f}/{h['test_loss'][-1]:.4f} "
               f"acc={h['train_acc'][-1]:.4f}/{h['test_acc'][-1]:.4f} "
-              f"(even={h['train_acc_even'][-1]:.3f}/{h['test_acc_even'][-1]:.3f}, "
-              f"odd={h['train_acc_odd'][-1]:.3f}/{h['test_acc_odd'][-1]:.3f})")
+              f"(pref={h['train_acc_preferred'][-1]:.3f}/{h['test_acc_preferred'][-1]:.3f}, "
+              f"unpref={h['train_acc_unpreferred'][-1]:.3f}/{h['test_acc_unpreferred'][-1]:.3f})")
 
     # -- Save artifacts -------------------------------------------------------
 
@@ -241,8 +253,8 @@ class BaseTrainer:
             **asdict(mc), **asdict(dc), **asdict(tc),
             "final_train_acc": h["train_acc"][-1],
             "final_test_acc": h["test_acc"][-1],
-            "final_test_acc_even": h["test_acc_even"][-1],
-            "final_test_acc_odd": h["test_acc_odd"][-1],
+            "final_test_acc_preferred": h["test_acc_preferred"][-1],
+            "final_test_acc_unpreferred": h["test_acc_unpreferred"][-1],
         }
         extra = self.extra_config_metadata()
         if extra:
@@ -256,4 +268,4 @@ class BaseTrainer:
 
         print(f"\nAll artifacts saved to {self.run_dir}")
         print(f"Final: acc={h['train_acc'][-1]:.4f}/{h['test_acc'][-1]:.4f} "
-              f"(even={h['test_acc_even'][-1]:.4f}, odd={h['test_acc_odd'][-1]:.4f})")
+              f"(pref={h['test_acc_preferred'][-1]:.4f}, unpref={h['test_acc_unpreferred'][-1]:.4f})")

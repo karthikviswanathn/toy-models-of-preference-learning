@@ -10,6 +10,7 @@ Token vocabulary:
     p+1: '<bos>'
     p+2: '<eos>'
     p+3: '<pad>'
+    p+4: 'U' (unsafe)
 """
 
 from typing import List, Union
@@ -32,15 +33,17 @@ class ModularAdditionTokenizer:
         self.bos_token = "<bos>"
         self.eos_token = "<eos>"
         self.pad_token = "<pad>"
+        self.unsafe_token = "U"
 
         # Special token IDs (numbers are 0..p-1)
         self.eq_token_id = p
         self.bos_token_id = p + 1
         self.eos_token_id = p + 2
         self.pad_token_id = p + 3
+        self.unsafe_token_id = p + 4
 
         # Vocabulary size
-        self.vocab_size = p + 4
+        self.vocab_size = p + 5
 
         # HuggingFace-compatible attribute for HookedTransformer.generate()
         self.padding_side = "right"
@@ -51,6 +54,7 @@ class ModularAdditionTokenizer:
         self._id_to_token[self.bos_token_id] = self.bos_token
         self._id_to_token[self.eos_token_id] = self.eos_token
         self._id_to_token[self.pad_token_id] = self.pad_token
+        self._id_to_token[self.unsafe_token_id] = self.unsafe_token
 
         self._token_to_id = {v: k for k, v in self._id_to_token.items()}
 

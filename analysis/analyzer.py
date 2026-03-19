@@ -2,7 +2,7 @@
 
 Supports two task modes:
   - "pt":  vanilla pretrain (a + b = c for all pairs)
-  - "ptg": parity-gated pretrain (even results predict c, odd predict EOS)
+  - "ptg": preference-gated pretrain (preferred results predict c, unpreferred predict U)
 
 Usage (notebook):
     from analysis.analyzer import ModelAnalyzer
@@ -32,7 +32,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from trainer.config import ModelConfig, DataConfig
 from trainer.utils import (
-    generate_parity_gated_data,
+    generate_preference_gated_data,
     split_data,
     eval_model,
     get_fourier_basis,
@@ -66,9 +66,9 @@ def load_model(path: str | Path) -> HookedTransformer:
     return model
 
 
-def generate_parity_gated_inputs(tokenizer: ModularAdditionTokenizer, device: str = "cpu"):
-    """Generate all p^2 parity-gated inputs, returning (inputs, result_labels)."""
-    inputs, labels, _, is_even = generate_parity_gated_data(tokenizer, device=device)
+def generate_preference_gated_inputs(tokenizer: ModularAdditionTokenizer, device: str = "cpu", unsafe_threshold: int = 57):
+    """Generate all p^2 preference-gated inputs, returning (inputs, result_labels)."""
+    inputs, labels, _, is_preferred = generate_preference_gated_data(tokenizer, device=device, unsafe_threshold=unsafe_threshold)
     p = tokenizer.p
     result_labels = np.array([(a + b) % p for a in range(p) for b in range(p)])
     return inputs, result_labels
@@ -111,7 +111,7 @@ class ModelAnalyzer:
 
     Args:
         model: A HookedTransformer instance.
-        task: "pt" (vanilla pretrain) or "ptg" (parity-gated pretrain).
+        task: "pt" (vanilla pretrain) or "ptg" (preference-gated pretrain).
         device: Device for computation.
         p: Prime modulus (defaults to ModelConfig().p).
         label: Human-readable label for plots.
@@ -127,6 +127,7 @@ class ModelAnalyzer:
         device: str = "cuda",
         p: int | None = None,
         label: str | None = None,
+        unsafe_threshold: int | None = None,
     ):
         if task not in self.VALID_TASKS:
             raise ValueError(f"task must be one of {self.VALID_TASKS}, got {task!r}")
@@ -139,13 +140,14 @@ class ModelAnalyzer:
         self.label = label
         self.device = device
         self.p = p or ModelConfig().p
+        self.unsafe_threshold = unsafe_threshold or DataConfig().unsafe_threshold
 
         # Tokenizer and data
         self.tokenizer = ModularAdditionTokenizer(self.p)
 
         if task == "ptg":
-            self.all_inputs, self.result_labels = generate_parity_gated_inputs(
-                self.tokenizer, "cpu"
+            self.all_inputs, self.result_labels = generate_preference_gated_inputs(
+                self.tokenizer, "cpu", unsafe_threshold=self.unsafe_threshold
             )
         else:  # task == "pt"
             inputs, labels = generate_all_data(self.tokenizer, device="cpu")
@@ -154,7 +156,7 @@ class ModelAnalyzer:
 
         self.a_labels = np.array([a for a in range(self.p) for _ in range(self.p)])
         self.b_labels = np.array([b for _ in range(self.p) for b in range(self.p)])
-        self.parity_labels = self.result_labels % 2 == 0  # True = even
+        self.preference_labels = self.result_labels < self.unsafe_threshold
 
         # Run forward pass and cache activations
         self.model.eval()
@@ -241,16 +243,16 @@ class ModelAnalyzer:
 
         Returns:
             Dict with keys: train_loss, test_loss, train_acc, test_acc.
-            For task="ptg", also includes train_acc_even, test_acc_even,
-            train_acc_odd, test_acc_odd.
+            For task="ptg", also includes train_acc_preferred, test_acc_preferred,
+            train_acc_unpreferred, test_acc_unpreferred.
         """
         if self.task == "ptg":
-            inputs, labels, loss_mask, is_even = generate_parity_gated_data(
-                self.tokenizer, device=self.device
+            inputs, labels, loss_mask, is_preferred = generate_preference_gated_data(
+                self.tokenizer, device=self.device, unsafe_threshold=self.unsafe_threshold
             )
             rng = np.random.default_rng(seed)
             tr_x, tr_y, tr_m, tr_e, te_x, te_y, te_m, te_e = split_data(
-                inputs, labels, loss_mask, is_even, train_frac, rng
+                inputs, labels, loss_mask, is_preferred, train_frac, rng
             )
             self.model.eval()
             tr_loss, tr_acc, tr_acc_e, tr_acc_o = eval_model(self.model, tr_x, tr_y, tr_m, tr_e)
@@ -258,8 +260,8 @@ class ModelAnalyzer:
             return dict(
                 train_loss=tr_loss, test_loss=te_loss,
                 train_acc=tr_acc, test_acc=te_acc,
-                train_acc_even=tr_acc_e, test_acc_even=te_acc_e,
-                train_acc_odd=tr_acc_o, test_acc_odd=te_acc_o,
+                train_acc_preferred=tr_acc_e, test_acc_preferred=te_acc_e,
+                train_acc_unpreferred=tr_acc_o, test_acc_unpreferred=te_acc_o,
             )
         else:  # task == "pt"
             from trainer.data import train_test_split
@@ -398,7 +400,7 @@ class ModelAnalyzer:
         self,
         pca_results: dict[str, PCAResult] | None = None,
         *,
-        color_by: str = "parity",
+        color_by: str = "preference",
         pc_pairs: list[tuple[int, int]] | None = None,
         save_path: str | Path | None = None,
     ) -> plt.Figure:
@@ -406,7 +408,7 @@ class ModelAnalyzer:
 
         Args:
             pca_results: Pre-computed PCA results, or None to auto-compute.
-            color_by: One of "parity", "result", "a", "b".
+            color_by: One of "preference", "result", "a", "b".
             pc_pairs: List of (i, j) pairs to plot. None = just PC1 vs PC2.
             save_path: If given, save figure to this path.
 
@@ -425,7 +427,7 @@ class ModelAnalyzer:
         ncols = len(pc_pairs)
         fig, axes = plt.subplots(nrows, ncols, figsize=(4 * ncols, 3.5 * nrows + 0.8), squeeze=False)
 
-        is_binary = color_by == "parity"
+        is_binary = color_by == "preference"
 
         for row_idx, stage_name in enumerate(stage_labels):
             pr = pca_results[stage_name]
@@ -435,10 +437,10 @@ class ModelAnalyzer:
                 ax = axes[row_idx, col_idx]
 
                 if is_binary:
-                    even = self.parity_labels
-                    ax.scatter(pr.projections[even, i], pr.projections[even, j],
+                    preferred = self.preference_labels
+                    ax.scatter(pr.projections[preferred, i], pr.projections[preferred, j],
                                c="tab:blue", s=2, alpha=0.4, rasterized=True)
-                    ax.scatter(pr.projections[~even, i], pr.projections[~even, j],
+                    ax.scatter(pr.projections[~preferred, i], pr.projections[~preferred, j],
                                c="tab:red", s=2, alpha=0.4, rasterized=True)
                 else:
                     colors = {"result": self.result_labels, "a": self.a_labels, "b": self.b_labels}[color_by]
@@ -463,8 +465,8 @@ class ModelAnalyzer:
         # Legend / colorbar
         if is_binary:
             handles = [
-                plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="tab:blue", markersize=6, label="even"),
-                plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="tab:red", markersize=6, label="odd"),
+                plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="tab:blue", markersize=6, label="preferred"),
+                plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="tab:red", markersize=6, label="unpreferred"),
             ]
             fig.legend(handles=handles, loc="lower center", ncol=2, fontsize=11, frameon=True, bbox_to_anchor=(0.5, -0.01))
         else:
@@ -575,7 +577,7 @@ class ModelAnalyzer:
     def compare_pca(
         analyzers: list[ModelAnalyzer],
         *,
-        color_by: str = "parity",
+        color_by: str = "preference",
         n_components: int = 2,
         save_path: str | Path | None = None,
     ) -> plt.Figure:
@@ -595,7 +597,7 @@ class ModelAnalyzer:
         ncols = len(stage_names)
         fig, axes = plt.subplots(nrows, ncols, figsize=(4 * ncols, 3.5 * nrows + 0.8), squeeze=False)
 
-        is_binary = color_by == "parity"
+        is_binary = color_by == "preference"
 
         for row_idx, a in enumerate(analyzers):
             pca_results = a.pca(n_components=n_components)
@@ -607,10 +609,10 @@ class ModelAnalyzer:
                 ax = axes[row_idx, col_idx]
 
                 if is_binary:
-                    even = a.parity_labels
-                    ax.scatter(pr.projections[even, 0], pr.projections[even, 1],
+                    preferred = a.preference_labels
+                    ax.scatter(pr.projections[preferred, 0], pr.projections[preferred, 1],
                                c="tab:blue", s=2, alpha=0.4, rasterized=True)
-                    ax.scatter(pr.projections[~even, 0], pr.projections[~even, 1],
+                    ax.scatter(pr.projections[~preferred, 0], pr.projections[~preferred, 1],
                                c="tab:red", s=2, alpha=0.4, rasterized=True)
                 else:
                     colors = {"result": a.result_labels, "a": a.a_labels, "b": a.b_labels}[color_by]
@@ -633,8 +635,8 @@ class ModelAnalyzer:
 
         if is_binary:
             handles = [
-                plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="tab:blue", markersize=6, label="even"),
-                plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="tab:red", markersize=6, label="odd"),
+                plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="tab:blue", markersize=6, label="preferred"),
+                plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="tab:red", markersize=6, label="unpreferred"),
             ]
             fig.legend(handles=handles, loc="lower center", ncol=2, fontsize=11, frameon=True, bbox_to_anchor=(0.5, -0.01))
         else:
@@ -660,8 +662,8 @@ class ModelAnalyzer:
         Uses the correct loss computation for the current task mode.
         """
         if self.task == "ptg":
-            inputs, labels, loss_mask, _ = generate_parity_gated_data(
-                self.tokenizer, device=logits_all.device
+            inputs, labels, loss_mask, _ = generate_preference_gated_data(
+                self.tokenizer, device=logits_all.device, unsafe_threshold=self.unsafe_threshold
             )
             loss_fn = nn.CrossEntropyLoss(reduction="none")
             logits = logits_all[:, :-1]

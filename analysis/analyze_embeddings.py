@@ -10,7 +10,7 @@ Usage (multi-model comparison):
         --model path/to/ptg.pt --label "PT-G" \
         --model path/to/sft.pt --label "SFT"
 
-Outputs: pca_analysis.pdf with pages for parity, result, a, b colorings.
+Outputs: pca_analysis.pdf with pages for preference, result, a, b colorings.
 """
 
 import argparse
@@ -28,7 +28,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from analysis.analyzer import ModelAnalyzer, load_model
 
-COLORINGS = ["parity", "result", "a", "b"]
+COLORINGS = ["preference", "result", "a", "b"]
 
 
 def main():

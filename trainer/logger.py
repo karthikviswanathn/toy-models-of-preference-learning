@@ -8,7 +8,7 @@ try:
 except ImportError:
     wandb = None
 
-WANDB_PROJECT = "toy-preference-training"
+WANDB_PROJECT = os.environ.get("WANDB_PROJECT", "toy-preference-less-than")
 
 
 class WandbLogger:
@@ -48,27 +48,28 @@ class WandbLogger:
         )
         self.enabled = True
 
-    def log(self, epoch, train=None, test=None):
+    def log(self, epoch, train=None, test=None, best_test_loss=None):
         """Log metrics for a given epoch.
 
         Args:
-            epoch: current epoch number
+            epoch: current epoch number (used as wandb step)
             train: tuple (loss, acc, ...) or dict of train metrics
             test: tuple (loss, acc, ...) or dict of test metrics
+            best_test_loss: running minimum of test loss
         """
         if not self.enabled:
             return
 
-        metrics = {"epoch": epoch}
+        metrics = {}
 
         if train is not None:
             if isinstance(train, (tuple, list)):
                 metrics["train/loss"] = train[0]
                 metrics["train/acc"] = train[1]
                 if len(train) > 2:
-                    metrics["train/acc_even"] = train[2]
+                    metrics["train/acc_preferred"] = train[2]
                 if len(train) > 3:
-                    metrics["train/acc_odd"] = train[3]
+                    metrics["train/acc_unpreferred"] = train[3]
             elif isinstance(train, dict):
                 for k, v in train.items():
                     metrics[f"train/{k}"] = v
@@ -78,12 +79,15 @@ class WandbLogger:
                 metrics["test/loss"] = test[0]
                 metrics["test/acc"] = test[1]
                 if len(test) > 2:
-                    metrics["test/acc_even"] = test[2]
+                    metrics["test/acc_preferred"] = test[2]
                 if len(test) > 3:
-                    metrics["test/acc_odd"] = test[3]
+                    metrics["test/acc_unpreferred"] = test[3]
             elif isinstance(test, dict):
                 for k, v in test.items():
                     metrics[f"test/{k}"] = v
+
+        if best_test_loss is not None:
+            metrics["test/best_loss"] = best_test_loss
 
         wandb.log(metrics, step=epoch)
 

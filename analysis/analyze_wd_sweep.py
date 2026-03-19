@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PCA of '=' token across weight decay sweep, colored by parity.
+"""PCA of '=' token across weight decay sweep, colored by preference.
 
 Usage:
     python toy_models_of_preference_training/code/analyze_wd_sweep.py \
@@ -24,10 +24,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from analysis.analyzer import (
-    STAGES, generate_parity_gated_inputs, extract_stage_activations, load_model,
+    STAGES, generate_preference_gated_inputs, extract_stage_activations, load_model,
 )
 from trainer.config import ModelConfig, DataConfig
-from trainer.utils import generate_parity_gated_data, split_data, eval_model
+from trainer.utils import generate_preference_gated_data, split_data, eval_model
 from trainer.tokenizer import ModularAdditionTokenizer
 
 
@@ -41,16 +41,16 @@ def main():
     mc = ModelConfig()
     dc = DataConfig()
     tokenizer = ModularAdditionTokenizer(mc.p)
-    all_inputs, result_labels = generate_parity_gated_inputs(tokenizer, "cpu")
+    all_inputs, result_labels = generate_preference_gated_inputs(tokenizer, "cpu", unsafe_threshold=dc.unsafe_threshold)
     print(f"Generated {len(all_inputs)} inputs (p={mc.p})")
 
     # Prepare test split for computing loss
-    inputs, labels, loss_mask, is_even = generate_parity_gated_data(tokenizer, device=args.device)
+    inputs, labels, loss_mask, is_preferred = generate_preference_gated_data(tokenizer, device=args.device, unsafe_threshold=dc.unsafe_threshold)
     with open(args.runs[0] / "config.json") as f:
         train_frac = json.load(f)["train_frac"]
     rng = np.random.default_rng(dc.seed)
-    _, _, _, _, test_x, test_y, test_m, test_even = split_data(
-        inputs, labels, loss_mask, is_even, train_frac, rng,
+    _, _, _, _, test_x, test_y, test_m, test_preferred = split_data(
+        inputs, labels, loss_mask, is_preferred, train_frac, rng,
     )
 
     # Load metadata and activations for each run
@@ -60,7 +60,7 @@ def main():
             wd = json.load(f)["weight_decay"]
         model = load_model(run_dir / "model.pt")
         model.to(args.device)
-        test_loss, test_acc, _, _ = eval_model(model, test_x, test_y, test_m, test_even)
+        test_loss, test_acc, _, _ = eval_model(model, test_x, test_y, test_m, test_preferred)
         print(f"  wd={wd}, test_loss={test_loss:.4f}, test_acc={test_acc:.4f}, arch={model.cfg.n_layers}L{model.cfg.n_heads}H")
         activations = extract_stage_activations(model, all_inputs, args.device)
         entries.append((wd, test_loss, activations))
@@ -69,8 +69,8 @@ def main():
     entries.sort(key=lambda e: e[0])
 
     # Plot: rows = stages, columns = weight decay values
-    even = result_labels % 2 == 0
-    odd = ~even
+    preferred = result_labels < dc.unsafe_threshold
+    unpreferred = ~preferred
     row_labels = [s[0] for s in STAGES]
     nrows = len(row_labels)
     ncols = len(entries)
@@ -86,9 +86,9 @@ def main():
             pca = PCA(n_components=2)
             proj = pca.fit_transform(data)
 
-            ax.scatter(proj[even, 0], proj[even, 1],
+            ax.scatter(proj[preferred, 0], proj[preferred, 1],
                        c="tab:blue", s=2, alpha=0.4, rasterized=True)
-            ax.scatter(proj[odd, 0], proj[odd, 1],
+            ax.scatter(proj[unpreferred, 0], proj[unpreferred, 1],
                        c="tab:red", s=2, alpha=0.4, rasterized=True)
 
             ax.tick_params(labelsize=9)
@@ -117,9 +117,9 @@ def main():
     # Legend
     handles = [
         plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="tab:blue",
-                    markersize=6, label="even"),
+                    markersize=6, label="preferred"),
         plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="tab:red",
-                    markersize=6, label="odd"),
+                    markersize=6, label="unpreferred"),
     ]
     fig.legend(handles=handles, loc="lower center", ncol=2, fontsize=11,
                frameon=True, bbox_to_anchor=(0.5, -0.01))

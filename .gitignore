@@ -1,3 +1,6 @@
 *.pyc
 outputs/logs/
 outputs/runs/
+outputs/runs-old/
+outputs/runs-duplicate/
+writeup/build

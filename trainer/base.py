@@ -70,6 +70,9 @@ class BaseTrainer:
         parser.add_argument("--weight_decay", type=float, default=None)
         parser.add_argument("--lr", type=float, default=None)
         parser.add_argument("--epochs", type=int, default=None)
+        parser.add_argument("--model_seed", type=int, default=None)
+        parser.add_argument("--split_seed", type=int, default=None)
+        parser.add_argument("--shuffle_seed", type=int, default=None)
 
     def apply_args(self, args, mc, dc, tc):
         """Apply parsed CLI args to configs. Call super().apply_args(...) first."""
@@ -83,6 +86,12 @@ class BaseTrainer:
             tc.lr = args.lr
         if args.epochs is not None:
             tc.epochs = args.epochs
+        if args.model_seed is not None:
+            mc.model_seed = args.model_seed
+        if args.split_seed is not None:
+            dc.split_seed = args.split_seed
+        if args.shuffle_seed is not None:
+            dc.shuffle_seed = args.shuffle_seed
 
     def before_training(self):
         """Hook called after setup, before the training loop."""
@@ -115,9 +124,8 @@ class BaseTrainer:
         print(f"Run dir: {self.run_dir}")
 
         self.tokenizer = ModularAdditionTokenizer(mc.p)
-        # Single RNG: used first for train/test split (via self.data_rng in
-        # subclass setup_data), then for mini-batch shuffling during training.
-        self.data_rng = np.random.default_rng(dc.seed)
+        self.split_rng = np.random.default_rng(dc.split_seed)
+        self.shuffle_rng = np.random.default_rng(dc.shuffle_seed)
         self.data = self.setup_data(mc, dc, self.tokenizer, DEVICE)
         self.model = self.setup_model(mc, dc, tc, DEVICE)
 
@@ -174,7 +182,7 @@ class BaseTrainer:
         bs = self.batch_size
 
         if bs < n_train:
-            perm = torch.tensor(self.data_rng.permutation(n_train), device=data.train_x.device)
+            perm = torch.tensor(self.shuffle_rng.permutation(n_train), device=data.train_x.device)
             data.train_x = data.train_x[perm]
             data.train_y = data.train_y[perm]
             data.train_mask = data.train_mask[perm]
@@ -206,12 +214,12 @@ class BaseTrainer:
         self.history["train_acc_even"].append(tr[2]); self.history["test_acc_even"].append(te[2])
         self.history["train_acc_odd"].append(tr[3]); self.history["test_acc_odd"].append(te[3])
 
-        self.logger.log(epoch + 1, train=tr, test=te)
-
         improved = te[0] < self.best_test_loss
         if improved:
             self.best_test_loss = te[0]
             torch.save(self.model, self.run_dir / "model.pt")
+
+        self.logger.log(epoch + 1, train=tr, test=te, best_test_loss=self.best_test_loss)
 
         self.model.train()
         return tr, te, improved

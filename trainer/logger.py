@@ -8,7 +8,7 @@ try:
 except ImportError:
     wandb = None
 
-WANDB_PROJECT = "toy-preference-training"
+WANDB_PROJECT = os.environ.get("WANDB_PROJECT", "toy-preference-training")
 
 
 class WandbLogger:
@@ -48,7 +48,7 @@ class WandbLogger:
         )
         self.enabled = True
 
-    def log(self, epoch, train=None, test=None):
+    def log(self, epoch, train=None, test=None, best_test_loss=None):
         """Log metrics for a given epoch.
 
         Args:
@@ -59,7 +59,7 @@ class WandbLogger:
         if not self.enabled:
             return
 
-        metrics = {"epoch": epoch}
+        metrics = {}
 
         if train is not None:
             if isinstance(train, (tuple, list)):
@@ -84,6 +84,9 @@ class WandbLogger:
             elif isinstance(test, dict):
                 for k, v in test.items():
                     metrics[f"test/{k}"] = v
+
+        if best_test_loss is not None:
+            metrics["test/best_loss"] = best_test_loss
 
         wandb.log(metrics, step=epoch)
 

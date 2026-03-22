@@ -27,7 +27,7 @@ class PretrainTrainer(BaseTrainer):
 
     def setup_data(self, mc, dc, tokenizer, device):
         train_x, train_y, test_x, test_y = generate_pretrain_data(
-            tokenizer, train_frac=dc.train_frac, rng=self.data_rng, device=device
+            tokenizer, train_frac=dc.train_frac, rng=self.split_rng, device=device
         )
         # Mask: loss on positions 3-4 (result + eos)
         train_mask = torch.zeros(len(train_x), 5, device=device)
@@ -43,7 +43,7 @@ class PretrainTrainer(BaseTrainer):
         )
 
     def run_dir_prefix(self, mc, dc, tc):
-        return f"pt_{mc.n_layers}L{mc.n_heads}H_tf{dc.train_frac}"
+        return f"pt/pt_wd{tc.weight_decay}_bs{dc.batch_size}_ms{mc.model_seed}_ss{dc.split_seed}_sh{dc.shuffle_seed}"
 
 
 if __name__ == "__main__":

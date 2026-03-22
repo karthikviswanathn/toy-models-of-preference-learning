@@ -16,14 +16,15 @@ class ModelConfig:
 
 @dataclass
 class DataConfig:
-    seed: int = 42  # controls train/test split and mini-batch shuffling
+    split_seed: int = 42   # controls train/test split
+    shuffle_seed: int = 43  # controls mini-batch shuffling
     train_frac: float = 0.3
     batch_size: int = 512  # -1 = full batch
 
 
 @dataclass
 class PretrainConfig:
-    epochs: int = 50000
+    epochs: int = 100000
     lr: float = 1e-3
     weight_decay: float = 0.5
     log_every: int = 100
@@ -32,7 +33,7 @@ class PretrainConfig:
 
 @dataclass
 class PretrainGatedConfig:
-    epochs: int = 50000
+    epochs: int = 100000
     lr: float = 1e-3
     weight_decay: float = 0.5
     log_every: int = 100
@@ -44,6 +45,6 @@ class SFTConfig:
     base_model: str = "outputs/models/pretrained.pt"
     epochs: int = 20000
     lr: float = 1e-4
-    weight_decay: float = 0.01
+    weight_decay: float = 0.5
     log_every: int = 100
     print_every: int = 1000

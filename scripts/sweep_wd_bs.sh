@@ -11,7 +11,7 @@ for wd in "${WEIGHT_DECAYS[@]}"; do
         echo "Submitting: wd=$wd, bs=$bs"
         sbatch --export=ALL,WANDB_PROJECT=toy-preference-wd-bs-sweep \
                --job-name="ptg-wd${wd}-bs${bs}" \
-               run_job.sh pretrain_gated.py \
+               run_job.sh trainer/pretrain_gated.py \
                --weight_decay "$wd" \
                --batch_size "$bs"
     done

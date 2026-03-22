@@ -1,6 +1,10 @@
 *.pyc
+__pycache__/
 outputs/logs/
 outputs/runs/
 outputs/runs-old/
 outputs/runs-duplicate/
+outputs/models/
+wandb/
+.ipynb_checkpoints/
 writeup/build

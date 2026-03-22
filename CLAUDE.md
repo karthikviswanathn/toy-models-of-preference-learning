@@ -22,9 +22,9 @@ Key finding: POST adds a "shallow patch" at the output layer while preserving pr
 ./allocate_node.sh [hours]   # default 1 hour
 
 # Submit training job
-sbatch run_job.sh pretrain.py --train_frac 0.3
-sbatch run_job.sh pretrain_gated.py --train_frac 0.3 --weight_decay 0.5
-sbatch run_job.sh sft.py --train_frac 0.35 --base_model outputs/models/pretrained.pt
+sbatch run_job.sh trainer/pretrain.py --train_frac 0.3
+sbatch run_job.sh trainer/pretrain_gated.py --train_frac 0.3 --weight_decay 0.5
+sbatch run_job.sh trainer/sft.py --train_frac 0.35 --base_model outputs/models/pretrained.pt
 ```
 
 Key dependencies: `torch` (ROCm), `transformer-lens`, `wandb`, `scikit-learn`, `matplotlib`.

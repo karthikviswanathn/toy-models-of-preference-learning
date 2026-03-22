@@ -28,7 +28,7 @@ for sh in "${SHUFFLE_SEEDS[@]}"; do
 
     sbatch --export=ALL,WANDB_PROJECT=toy-preference-sweep-sft \
            --job-name="sft-wd${wd}-bs${bs}-ms${ms}-ss${ss}-sh${sh}" \
-           run_job.sh sft.py \
+           run_job.sh trainer/sft.py \
            --base_model "${PT_DIR}/model.pt" \
            --weight_decay "$wd" \
            --batch_size "$bs" \

@@ -10,12 +10,12 @@
 
 set -e
 
-source /project/project_465002390/fair_stuff/simplex-research/.claude/activate_env.sh
+source /pfs/lustrep3/projappl/project_465002390/fair_stuff/toy-models-of-preference-learning/.claude/activate_env.sh
 cd /pfs/lustrep3/projappl/project_465002390/fair_stuff/toy-models-of-preference-learning
 
 SCRIPT="$1"
 shift
 
 echo "=== Running: $SCRIPT $@ ==="
-python -u "trainer/$SCRIPT" "$@"
+python -u "$SCRIPT" "$@"
 echo "=== Done ==="

@@ -10,6 +10,6 @@ srun --partition=small-g \
      --account=project_465002390 \
      --pty bash -c "
         # Source the environment activation script
-        source /project/project_465002390/fair_stuff/simplex-research/.claude/activate_env.sh
+        source /pfs/lustrep3/projappl/project_465002390/fair_stuff/toy-models-of-preference-learning/.claude/activate_env.sh
         exec bash
      "

@@ -82,7 +82,7 @@ We then compare two routes to this behavior:
 
 \begin{figure}[t]
   \centering
-  \includegraphics[width=\textwidth]{figs/diagram.pdf}
+  \includegraphics[width=0.85\textwidth]{figs/diagram.pdf}
   \caption{Overview of the training pipeline. Both \POST{} and \PTG{} produce the same gated responses---correct answers for even results and \eos{} for odd---but arrive there via different training procedures.}
   \label{fig:setup_diagram}
 \end{figure}
@@ -91,12 +91,11 @@ A preliminary analysis of the residual stream already reveals a fundamental diff
 In \PTG, the residual stream at the \texttt{=}~position separates even and odd inputs along its principal components, indicating the primary axes of the representation at every stage encode information about the preference.
 In \POST, even and odd inputs remain interleaved, and the Fourier ring structure of the base pretrained model is preserved intact.
 This suggests that \POST{} operates as a shallow patch on top of the pretrained computation, while \PTG{} has integrated parity into its representations from the ground up---a hypothesis we investigate in detail in the following sections.
-We note that PCA projections can vary qualitatively across hyperparameter and seed choices, even among models with comparable test loss; we document this variability for the top-performing models of each variant in \Cref{app:sweep}.
+We note that PCA projections can vary qualitatively across hyperparameter and seed choices, even among models with comparable test loss; we document this variability for the top-performing models of each variant in \Cref{app:pca_variability}.
 
 \begin{figure}[t]
   \centering
-  \todo{Insert PCA stages parity figure}
-  % \includegraphics[width=\textwidth]{figs/pca_stages_parity.png}
+  \includegraphics[width=\textwidth]{figs/wd0.15_bs1024_ms1234_ss42_sh44/pca_stages_parity.png}
   \caption{Residual stream PCA of the \texttt{=} token at different stages (post-attention and post-MLP) in \POST{} (top) and \PTG{} (bottom). Parity is encoded in the top principal components of \PTG{} but not \POST, despite identical outputs.}
   \label{fig:pca_overview}
 \end{figure}
@@ -124,19 +123,7 @@ Pretrained from scratch on parity-gated data:
 Both \POST{} and \PTG{} achieve near-identical input--output behavior: they output the correct answer $c = (a+b) \bmod p$ when $c$ is even, and output \eos{} when $c$ is odd.
 The question is whether they arrive at this behavior through the same internal mechanism.
 
-\begin{table}[t]
-  \centering
-  \caption{Test performance of \POST{} and \PTG{} evaluated against parity-gated labels. \PT{} achieves 0\% odd accuracy (no concept of suppression), confirming that \POST's improvement consists entirely of learning to suppress odd outputs.}
-  \label{tab:performance}
-  \begin{tabular}{lcccc}
-    \toprule
-    Model & Test Acc & Even Acc & Odd Acc & Test Loss \\
-    \midrule
-    \POST  & 99.93\% & 99.95\% & 99.90\% & 0.0023 \\
-    \PTG   & 98.43\% & 97.36\% & 99.52\% & 0.0606 \\
-    \bottomrule
-  \end{tabular}
-\end{table}
+\todo{Table: Test performance of POST and PT-G (test acc, even acc, odd acc, test loss). PT achieves 0\% odd accuracy, confirming POST's improvement is entirely learning to suppress odd outputs.}
 
 \PTG{} achieves comparable overall accuracy to \POST{} but with notably higher test loss ($0.06$ vs.\ $0.002$), reflecting the additional cost of learning the preference and the underlying task simultaneously on the same architecture---a toy instance of the alignment tax.\footnote{The higher loss may also reflect an inherent difficulty in encoding both modular arithmetic and parity gating within a single layer.}
 
@@ -147,7 +134,12 @@ The question is whether they arrive at this behavior through the same internal m
 \subsection{Fourier spectrum of embedding is preserved}
 \label{sec:post:embedding}
 
-\todo{Embedding Fourier spectrum: PT vs POST. Same peaks, reduced magnitudes.}
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=\textwidth]{figs/wd0.15_bs1024_ms1234_ss42_sh44/fourier_embedding.png}
+  \caption{Fourier power spectrum of the embedding matrix $W_E$ (number tokens only). Left: \PT{} and \POST{} overplotted---\POST{} preserves the same peak frequencies with reduced magnitudes. Right: \PTG{} develops a different spectral profile.}
+  \label{fig:fourier_embedding}
+\end{figure}
 
 \subsection{Neuron-logit map structure is preserved}
 \label{sec:post:neuron_logit}
@@ -155,29 +147,13 @@ The question is whether they arrive at this behavior through the same internal m
 The neuron-logit map $\Wlogit = \WU^T \Wout^T$ connects MLP neuron activations to output logits.
 Analyzing it in the Fourier basis reveals that \POST{} preserves the same key frequencies as \PT, with attenuated magnitudes.
 
-\todo{Fourier spectrum of $\Wlogit$. POST preserves same frequencies as PT.}
-
-\subsection{Gating happens by suppressing odd logits}
-\label{sec:post:gating}
-
-The key mechanism by which \POST{} suppresses odd answers is through the DC component of the logits.
-When we decompose the logits in the 2D Fourier basis, the DC component $\Fc_c(0,0)$---which acts as a bias per output logit---shows a striking even/odd alternation in \POST{} that is absent in \PT.
-This means the \POST{} model learns to suppress the odd logits irrespective of input.
-
-To test this hypothesis at scale, we construct a \emph{hybrid model} for each of the 126 sweep configurations: we take the \POST{} model and replace its MLP output projection ($W_{\text{out}}$, $b_{\text{out}}$) and unembedding matrix ($W_U$, $b_U$) with those from the corresponding \PT{} model, keeping all other weights from \POST.
-We then evaluate the hybrid on standard modular addition (without parity gating).
-\Cref{fig:hybrid_cdf} shows the distribution of hybrid accuracy across all configurations.
-The hybrid recovers $\geq 99\%$ accuracy in 21\% of runs and $\geq 90\%$ in 39\%, confirming that for a substantial fraction of models, the internal Fourier computation of \POST{} is sufficiently preserved that restoring the pretrained output layers recovers full modular addition performance.
-The runs where the hybrid does not fully recover suggest that \POST{} fine-tuning can also induce changes beyond the output projection, though the degree varies across hyperparameter and seed choices.
-
-\begin{figure}[t]
+\begin{figure}[h]
   \centering
-  \includegraphics[width=0.8\textwidth]{figs/hybrid_cdf.png}
-  \caption{Distribution of hybrid model accuracy on standard modular addition across 126 sweep configurations. The hybrid combines \POST{} MLP activations with \PT's neuron-logit map ($\WU \Wout$).}
-  \label{fig:hybrid_cdf}
+  \includegraphics[width=\textwidth]{figs/wd0.15_bs1024_ms1234_ss42_sh44/fourier_neuron_logit.png}
+  \caption{Fourier power spectrum of the neuron-logit map $\Wlogit = \Wout \WU$. \POST{} preserves the same dominant frequencies as \PT{} with attenuated power. \PTG{} exhibits a qualitatively different spectrum.}
+  \label{fig:fourier_neuron_logit}
 \end{figure}
 
-\todo{DC component figure: PT vs POST, per output token.}
 
 \subsection{No internal parity separation in POST}
 \label{sec:post:pca}
@@ -192,13 +168,12 @@ The runs where the hybrid does not fully recover suggest that \POST{} fine-tunin
 \label{sec:ptg:fourier}
 
 \PTG{} develops a different Fourier spectrum compared to \PT{} and \POST, reflecting the different training objective.
-
-\todo{Fourier spectrum comparison across all three models.}
+The embedding spectrum (\Cref{fig:fourier_embedding}, right panel) shows that \PTG{} allocates power across a broader set of frequencies than \PT{} or \POST.
 
 \subsection{Neuron-logit map}
 \label{sec:ptg:neuron_logit}
 
-\todo{Neuron-logit Fourier spectrum for PT-G. Notably different from POST.}
+The neuron-logit spectrum for \PTG{} (\Cref{fig:fourier_neuron_logit}, right panel) is notably different from both \PT{} and \POST, consistent with a fundamentally different internal computation.
 
 \subsection{Parity separation emerges across the network}
 \label{sec:ptg:parity}
@@ -214,6 +189,78 @@ PCA of the \texttt{=}~token representation reveals clear clustering by parity in
 \todo{Per-head PCA. Some heads show clear even/odd separation.}
 
 % ============================================================
+\section{Hyperparameter Sweep}
+\label{sec:sweep}
+
+To ensure that our mechanistic findings are robust to hyperparameter and seed choices, we train \PT{} and \PTG{} across a grid sweeping over:
+\begin{itemize}
+  \item Weight decay $\in \{0.15, 0.3, 0.5\}$
+  \item Batch size $\in \{256, 512, 1024, \text{full}\}$
+  \item Model initialization seed $\in \{1234, 1235, 1236\}$
+  \item Train/test split seed $\in \{41, 42\}$
+  \item Mini-batch shuffle seed $\in \{43, 44\}$
+\end{itemize}
+For \POST, we fine-tune from the best \PT{} checkpoint (selected by lowest test loss) using the same sweep grid.
+All variants use learning rate $10^{-3}$ except \POST{} ($10^{-4}$), and all run for 100{,}000 epochs.
+Since the shuffle seed has no effect for full-batch training ($\text{bs} = \text{full}$), we deduplicate these runs, yielding 126 unique configurations per variant.\footnote{The full grid produces $3 \times 4 \times 3 \times 2 \times 2 = 144$ runs, but the 18 full-batch runs with \texttt{shuffle\_seed}$\,=44$ are exact duplicates of those with \texttt{shuffle\_seed}$\,=43$.}
+
+\subsection{Sweep results}
+\Cref{tab:sweep_results} summarizes the best test loss and final test accuracy distributions across all 126 runs per variant.
+\PT{} generalizes reliably: 98\% of runs (123/126) reach $\geq 99\%$ test accuracy, with a median best test loss of $2.3 \times 10^{-7}$.
+\PTG{} shows greater variance---88\% of runs (111/126) reach $\geq 99\%$ accuracy, with a median best test loss of $7.8 \times 10^{-4}$---reflecting the additional difficulty of learning both modular arithmetic and parity gating simultaneously.
+\POST{} inherits the strong \PT{} base and generalizes reliably: 95\% of runs (120/126) reach $\geq 99\%$ accuracy, with a median best test loss of $4.7 \times 10^{-5}$, and no runs fall below 90\% accuracy.
+
+\begin{table}[h]
+  \centering
+  \begin{tabular}{lccc}
+    \toprule
+    & \PT & \POST & \PTG \\
+    \midrule
+    Median best test loss  & $2.3 \times 10^{-7}$ & $4.7 \times 10^{-5}$ & $7.8 \times 10^{-4}$ \\
+    Best test loss (min)   & $8.4 \times 10^{-8}$ & $1.0 \times 10^{-7}$ & $1.4 \times 10^{-7}$ \\
+    Best test loss (max)   & $3.4 \times 10^{-1}$ & $2.0 \times 10^{-1}$ & $7.6 \times 10^{-1}$ \\
+    \midrule
+    Runs with acc $\geq 99.9\%$ & 117/126 & 95/126 & 49/126 \\
+    Runs with acc $\geq 99\%$   & 123/126 & 120/126 & 111/126 \\
+    Runs with acc $< 90\%$      & 2/126   & 0/126   & 2/126 \\
+    \bottomrule
+  \end{tabular}
+  \caption{Sweep results summary (126 unique configurations per variant). For each hyperparameter combination, we select the checkpoint with the lowest test loss across all epochs. Accuracy is reported at the final epoch.}
+  \label{tab:sweep_results}
+\end{table}
+
+The few low-accuracy runs in \PT{} and \PTG{} ($<90\%$) correspond to configurations that did not fully generalize within 100{,}000 epochs, predominantly full-batch training with higher weight decay---a regime where grokking is known to require longer training \citep{nanda2023grokking}.
+Notably, \POST{} has no such failures, as it starts from an already-generalized \PT{} checkpoint.
+
+\Cref{fig:cdf_test_loss} shows the cumulative distribution of best test loss for \POST{} and \PTG{} across all 126 configurations.
+\POST{} consistently achieves lower test loss than \PTG{}, with its CDF shifted left by roughly one to two orders of magnitude.
+This gap quantifies the alignment tax of incorporating preferences during pretraining: \PTG{} must jointly learn modular arithmetic and parity gating from scratch, whereas \POST{} fine-tunes an already-generalised base model, paying a smaller cost to acquire the preference.
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.65\textwidth]{figs/cdf_best_test_loss.png}
+  \caption{CDF of best test loss for \POST{} and \PTG{} across 126 sweep configurations. \POST{} consistently achieves lower loss, reflecting the reduced alignment tax of post-training compared to preference-incorporated pretraining.}
+  \label{fig:cdf_test_loss}
+\end{figure}
+
+\subsection{Hybrid model analysis}
+\label{sec:sweep:hybrid}
+
+To test whether \POST{} preserves the pretrained Fourier circuit, we construct a \emph{hybrid model} for each of the 126 sweep configurations: we take the \POST{} model and replace its MLP output projection ($W_{\text{out}}$, $b_{\text{out}}$) and unembedding matrix ($\WU$, $b_U$) with those from the corresponding \PT{} model, keeping all other weights from \POST.
+We then evaluate the hybrid on standard modular addition (without parity gating).
+\Cref{fig:hybrid_cdf} shows the distribution of hybrid accuracy across all configurations.
+The hybrid recovers $\geq 99\%$ accuracy in 21\% of runs and $\geq 90\%$ in 39\%, confirming that for a substantial fraction of models, the internal Fourier computation of \POST{} is sufficiently preserved that restoring the pretrained output layers recovers full modular addition performance.
+The runs where the hybrid does not fully recover suggest that \POST{} fine-tuning can also induce changes beyond the output projection, though the degree varies across hyperparameter and seed choices.
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.65\textwidth]{figs/hybrid_cdf.png}
+  \caption{Distribution of hybrid model accuracy on standard modular addition across 126 sweep configurations. The hybrid combines \POST{} internal weights with \PT's output projection and unembedding ($\WU$, $\Wout$).}
+  \label{fig:hybrid_cdf}
+\end{figure}
+
+% ============================================================
+
 \section{Discussion}
 \label{sec:discussion}
 
@@ -261,8 +308,27 @@ Input sequences have context length 6.
 
 \paragraph{Optimization.}
 All models are trained with AdamW ($\beta_1 = 0.9$, $\beta_2 = 0.98$) and a masked next-token prediction loss (cross-entropy on designated output positions only).
-Training uses a fixed train/test split (seed 42) with train fraction $0.3$ (i.e., $0.3 \times 113^2 \approx 3{,}831$ examples).
-Mini-batches of size 512 are shuffled with a fixed seed for reproducibility.
+Training uses a fixed train/test split with train fraction $0.3$ (i.e., $0.3 \times 113^2 \approx 3{,}831$ examples).
+Mini-batches are shuffled with a fixed seed for reproducibility.
+\Cref{tab:canonical_hyperparams} lists the specific hyperparameter configuration used for all main-text analyses; \Cref{sec:sweep} validates robustness across a broader grid.
+
+\begin{table}[h]
+  \centering
+  \begin{tabular}{ll}
+    \toprule
+    Parameter & Value \\
+    \midrule
+    Weight decay & 0.15 \\
+    Batch size & 1024 \\
+    Model seed & 1234 \\
+    Split seed & 42 \\
+    Shuffle seed & 44 \\
+    Train fraction & 0.3 \\
+    \bottomrule
+  \end{tabular}
+  \caption{Hyperparameters for the canonical models used in the main text, selected from the sweep (\Cref{sec:sweep}).}
+  \label{tab:canonical_hyperparams}
+\end{table}
 
 \begin{table}[h]
   \centering
@@ -271,12 +337,10 @@ Mini-batches of size 512 are shuffled with a fixed seed for reproducibility.
     & \PT & \POST & \PTG \\
     \midrule
     Learning rate      & $10^{-3}$ & $10^{-4}$ & $10^{-3}$ \\
-    Weight decay       & 0.5       & 0.5       & 0.5 \\
     Max epochs         & 100{,}000 & 20{,}000 & 100{,}000 \\
-    Batch size         & 512       & 512       & 512 \\ 
     \bottomrule
   \end{tabular}
-  \caption{Training hyperparameters for each model variant. \POST{} uses a lower learning rate since it is a finetuning step.}
+  \caption{Per-variant training hyperparameters. \POST{} uses a lower learning rate since it is a fine-tuning step.}
   \label{tab:hyperparams}
 \end{table}
 
@@ -294,50 +358,6 @@ All models share the same model initialization seed (1234).
 \PT{} and \PTG{} are initialized from scratch.
 
 % ============================================================
-\section{Hyperparameter Sweep}
-\label{app:sweep}
-
-To ensure that our mechanistic findings are robust to hyperparameter and seed choices, we train \PT{} and \PTG{} across a grid sweeping over:
-\begin{itemize}
-  \item Weight decay $\in \{0.15, 0.3, 0.5\}$
-  \item Batch size $\in \{256, 512, 1024, \text{full}\}$
-  \item Model initialization seed $\in \{1234, 1235, 1236\}$
-  \item Train/test split seed $\in \{41, 42\}$
-  \item Mini-batch shuffle seed $\in \{43, 44\}$
-\end{itemize}
-For \POST, we fine-tune from the best \PT{} checkpoint (selected by lowest test loss) using the same sweep grid.
-All variants use learning rate $10^{-3}$ except \POST{} ($10^{-4}$), and all run for 100{,}000 epochs.
-Since the shuffle seed has no effect for full-batch training ($\text{bs} = \text{full}$), we deduplicate these runs, yielding 126 unique configurations per variant.\footnote{The full grid produces $3 \times 4 \times 3 \times 2 \times 2 = 144$ runs, but the 18 full-batch runs with \texttt{shuffle\_seed}$\,=44$ are exact duplicates of those with \texttt{shuffle\_seed}$\,=43$.}
-
-\paragraph{Sweep results.}
-\Cref{tab:sweep_results} summarizes the best test loss and final test accuracy distributions across all 126 runs per variant.
-\PT{} generalizes reliably: 98\% of runs (123/126) reach $\geq 99\%$ test accuracy, with a median best test loss of $2.3 \times 10^{-7}$.
-\PTG{} shows greater variance---88\% of runs (111/126) reach $\geq 99\%$ accuracy, with a median best test loss of $7.8 \times 10^{-4}$---reflecting the additional difficulty of learning both modular arithmetic and parity gating simultaneously.
-\POST{} inherits the strong \PT{} base and generalizes reliably: 95\% of runs (120/126) reach $\geq 99\%$ accuracy, with a median best test loss of $4.7 \times 10^{-5}$, and no runs fall below 90\% accuracy.
-
-\begin{table}[h]
-  \centering
-  \begin{tabular}{lccc}
-    \toprule
-    & \PT & \POST & \PTG \\
-    \midrule
-    Median best test loss  & $2.3 \times 10^{-7}$ & $4.7 \times 10^{-5}$ & $7.8 \times 10^{-4}$ \\
-    Best test loss (min)   & $8.4 \times 10^{-8}$ & $1.0 \times 10^{-7}$ & $1.4 \times 10^{-7}$ \\
-    Best test loss (max)   & $3.4 \times 10^{-1}$ & $2.0 \times 10^{-1}$ & $7.6 \times 10^{-1}$ \\
-    \midrule
-    Runs with acc $\geq 99.9\%$ & 117/126 & 95/126 & 49/126 \\
-    Runs with acc $\geq 99\%$   & 123/126 & 120/126 & 111/126 \\
-    Runs with acc $< 90\%$      & 2/126   & 0/126   & 2/126 \\
-    \bottomrule
-  \end{tabular}
-  \caption{Sweep results summary (126 unique configurations per variant). For each hyperparameter combination, we select the checkpoint with the lowest test loss across all epochs. Accuracy is reported at the final epoch.}
-  \label{tab:sweep_results}
-\end{table}
-
-The few low-accuracy runs in \PT{} and \PTG{} ($<90\%$) correspond to configurations that did not fully generalize within 100{,}000 epochs, predominantly full-batch training with higher weight decay---a regime where grokking is known to require longer training \citep{nanda2023grokking}.
-Notably, \POST{} has no such failures, as it starts from an already-generalized \PT{} checkpoint.
-
-% ============================================================
 \section{PCA Variability Across Runs}
 \label{app:pca_variability}
 
@@ -349,19 +369,19 @@ Despite all achieving near-perfect accuracy, the PCA projections differ noticeab
   \centering
   \begin{subfigure}{\textwidth}
     \centering
-    \includegraphics[width=\textwidth]{figs/pca_top_pt.png}
+    \includegraphics[width=0.9\textwidth]{figs/pca_top_pt.png}
     \caption{\PT{}}
     \label{fig:pca_top_pt}
   \end{subfigure}\\[1em]
   \begin{subfigure}{\textwidth}
     \centering
-    \includegraphics[width=\textwidth]{figs/pca_top_sft.png}
+    \includegraphics[width=0.9\textwidth]{figs/pca_top_sft.png}
     \caption{\POST{}}
     \label{fig:pca_top_sft}
   \end{subfigure}\\[1em]
   \begin{subfigure}{\textwidth}
     \centering
-    \includegraphics[width=\textwidth]{figs/pca_top_ptg.png}
+    \includegraphics[width=0.9\textwidth]{figs/pca_top_ptg.png}
     \caption{\PTG{}}
     \label{fig:pca_top_ptg}
   \end{subfigure}

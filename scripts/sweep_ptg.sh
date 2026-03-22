@@ -18,7 +18,7 @@ for sh in "${SHUFFLE_SEEDS[@]}"; do
 
     sbatch --export=ALL,WANDB_PROJECT=toy-preference-sweep-ptg \
            --job-name="ptg-wd${wd}-bs${bs}-ms${ms}-ss${ss}-sh${sh}" \
-           run_job.sh pretrain_gated.py \
+           run_job.sh trainer/pretrain_gated.py \
            --weight_decay "$wd" \
            --batch_size "$bs" \
            --model_seed "$ms" \

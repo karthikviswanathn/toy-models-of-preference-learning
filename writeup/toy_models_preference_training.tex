@@ -59,13 +59,13 @@
 % ============================================================
 \begin{abstract}
 \noindent
-We use a fully interpretable setting to compare the internal mechanisms that emerge when preferences are introduced during post-training versus built into pretraining data.
-We train one-layer transformers on modular addition over~$\Zp$ with a parity-gated preference: models output the correct answer when the result is even but suppress their answer when the result is odd.\footnote{Odd results serve as a toy analogue of ``unsafe outputs``.}
-We compare a post-trained model (\POST), which is fine-tuned from a model pretrained on modular addition, against a model pretrained from scratch on gated data (\PTG).
-Both achieve near-identical input--output behavior, yet their internal mechanisms differ fundamentally:
-\POST{} preserves the pretrained Fourier circuit and patches behavior at the output projection via a DC~bias that suppresses odd logits,
-while \PTG{} encodes parity throughout the residual stream at every stage of the network.
-These results provide a mechanistic case study showing that alignment learned during pretraining is structurally deeper than alignment introduced via post-training.
+How do the internal mechanisms of a model differ when preferences are introduced during post-training versus built into pretraining data?
+This work investigates the question in a fully interpretable setting: one-layer transformers trained on modular addition over~$\Zp$ with a parity-gated preference---models output the correct answer when the result is even but suppress it when odd.
+A post-trained model (\POST), fine-tuned from a standard pretrained model, is compared against a model pretrained from scratch on gated data (\PTG).
+Both achieve near-identical input--output behavior, yet their internal mechanisms differ fundamentally.
+Across 126 hyperparameter configurations, linear probes show that parity is linearly encoded in \PTG's residual stream at the post-attention and post-MLP stages, but not in \POST---while \POST{} consistently achieves lower test loss.
+The result is a toy analogue of the safety--capability tradeoff: post-training preserves capability but produces shallow alignment, whereas preference-aware pretraining accepts a capability tax for structurally deeper alignment.
+Mechanistic analysis of a canonical model confirms that \POST{} preserves the pretrained Fourier circuit and patches behavior at the output layer, while \PTG{} encodes parity throughout the network from the ground up.
 \end{abstract}
 
 % ============================================================
@@ -81,7 +81,7 @@ If instead the preference is encoded into the model's representations during pre
 Distinguishing these cases requires looking inside the network, but in realistic models we rarely have the interpretability tools to do so with confidence.
 
 We make this comparison precise using a fully interpretable toy setting: one-layer transformers trained on modular addition over~$\Zp$, a setting studied in \citet{nanda2023grokking}.
-We then introduce a toy preference: \textit{the model should output the correct answer when the result is even, but suppress its answer when the result is odd.}
+We then introduce a toy preference: \textit{the model should output the correct answer when the result is even, but suppress its answer when the result is odd.}\footnote{Odd results serve as a toy analogue of unsafe outputs: the model knows the correct answer but must learn to withhold it.}
 We then compare two routes to this behavior:
 \begin{itemize}
   \item \textbf{Post-Trained (\POST):} Pretrain on standard modular addition, then fine-tune to suppress odd answers.
@@ -90,39 +90,15 @@ We then compare two routes to this behavior:
 
 \begin{figure}[!htbp]
   \centering
-  \includegraphics[width=0.85\textwidth]{figs/diagram.pdf}
-  \caption{Overview of the training pipeline. Both \POST{} and \PTG{} produce the same gated responses---correct answers for even results and \eos{} for odd---but arrive there via different training procedures.}
+  \includegraphics[width=0.8\textwidth]{figs/diagram.pdf}
+  \caption{\textbf{Overview of the training pipeline.} Both \POST{} and \PTG{} produce the same gated responses---correct answers for even results and \eos{} for odd---but arrive there via different training procedures.}
   \label{fig:setup_diagram}
 \end{figure}
 
-A preliminary analysis of the residual stream already reveals a fundamental difference in the geometry of internal activations (\Cref{fig:pca_overview}).
-In \PTG, the residual stream at the \texttt{=}~position separates even and odd inputs along its principal components, indicating the primary axes of the representation at every stage encode information about the preference.
-In \POST, even and odd inputs remain interleaved, and the Fourier ring structure of the base pretrained model is preserved intact.
-This suggests that \POST{} operates as a shallow patch on top of the pretrained computation, while \PTG{} has integrated parity into its representations from the ground up---a hypothesis we investigate in detail in the following sections.
-
-Linear probes trained to predict parity from internal activations confirm this quantitatively (\Cref{tab:parity_probes_sweep}).
-Averaged across 126 hyperparameter configurations, parity is not linearly decodable in \PT{} or \POST{} at any stage, but becomes increasingly separable in \PTG{}---reaching perfect accuracy after the MLP.
-
-\begin{table}[!htbp]
-  \centering
-  \begin{tabular}{lccc}
-    \toprule
-    Location    & \PT  & \POST & \PTG \\
-    \midrule
-    Post-Attn   & $0.52 \pm 0.08$ & $0.53 \pm 0.09$ & $0.90 \pm 0.10$ \\
-    Post-MLP    & $0.66 \pm 0.19$ & $0.66 \pm 0.19$ & $1.00 \pm 0.00$ \\
-    \bottomrule
-  \end{tabular}
-  \caption{Mean parity probe accuracy across 126 sweep configurations. Attn Heads averages over all $126 \times 4 = 504$ head--model pairs; Post-Attn and Post-MLP average over 126 models each. Chance is $\approx 0.50$.}
-  \label{tab:parity_probes_sweep}
-\end{table}
-
-\begin{figure}[!htbp]
-  \centering
-  \includegraphics[width=\textwidth]{figs/wd0.15_bs1024_ms1234_ss42_sh44/pca_stages_parity.png}
-  \caption{Residual stream PCA of the \texttt{=} token at different stages (post-attention and post-MLP) in \POST{} (top) and \PTG{} (bottom). Parity is linearly encoded in the top principal components of \PTG{} but not \POST, despite identical outputs.}
-  \label{fig:pca_overview}
-\end{figure}
+Linear probes and test loss distributions across 126 hyperparameter configurations (\Cref{fig:ensemble_evidence}) reveal two central findings:
+parity is linearly encoded in \PTG's residual stream but not in \PT{} or \POST{} (\Cref{fig:ensemble_evidence}a), while \POST{} consistently achieves lower test loss (\Cref{fig:ensemble_evidence}b).
+This suggests that \POST{} operates as a shallow patch on top of the pretrained computation, while \PTG{} has integrated parity into its representations from the ground up---at the cost of higher loss.
+We examine these ensemble results in \Cref{sec:ensemble} and then zoom into a canonical model for mechanistic detail in \Cref{sec:analysis}.
 
 % ============================================================
 \section{Setup}
@@ -146,115 +122,14 @@ Pretrained from scratch on parity-gated data:
 
 Both \POST{} and \PTG{} achieve near-identical input--output behavior: they output the correct answer $c = (a+b) \bmod p$ when $c$ is even, and output \eos{} when $c$ is odd.
 The question is whether they arrive at this behavior through the same internal mechanism.
-All main-text analyses use a single canonical hyperparameter configuration (see \Cref{tab:canonical_hyperparams}); robustness across a broader grid is validated in \Cref{sec:sweep}.
-
-\begin{table}[h]
-  \centering
-  \begin{tabular}{lccc}
-    \toprule
-                    & \PT     & \POST    & \PTG    \\
-    \midrule
-    Test loss       & $9.2 \times 10^{-8}$ & $2.1 \times 10^{-7}$ & $6.8 \times 10^{-7}$ \\
-    Test acc        & 1.0     & 1.0      & 1.0     \\
-    \bottomrule
-  \end{tabular}
-  \caption{Test performance of the canonical models. Test loss is reported on each model's own training objective.}
-  \label{tab:test_performance}
-\end{table}
+We first validate our findings across a broad hyperparameter sweep (\Cref{sec:ensemble}), then examine a single canonical configuration in mechanistic detail (\Cref{sec:analysis}; hyperparameters in \Cref{tab:canonical_hyperparams}).
 
 % ============================================================
-\section{Mechanistic Analysis}
-\label{sec:analysis}
+\section{Ensemble Results}
+\label{sec:ensemble}
 
-\subsection{Fourier spectrum of the embedding}
-\label{sec:analysis:embedding}
-
-\begin{figure}[!htbp]
-  \centering
-  \includegraphics[width=0.9 \textwidth]{figs/wd0.15_bs1024_ms1234_ss42_sh44/fourier_embedding.png}
-  \caption{Fourier power spectrum of the embedding matrix $W_E$. Left: \PT{} and \POST{} overplotted---\POST{} preserves the same peak frequencies with reduced magnitudes. Right: \PTG{} develops a different spectral profile with power spread across more frequencies.}
-  \label{fig:fourier_embedding}
-\end{figure}
-
-\Cref{fig:fourier_embedding} shows the Fourier power spectrum of the embedding matrix $W_E$ for all three variants.
-\POST{} preserves the same peak frequencies as \PT{} with reduced magnitudes, consistent with fine-tuning that modifies weights without restructuring the learned representation.
-\PTG{}, by contrast, allocates power across a broader set of frequencies, reflecting the different training objective that requires encoding both modular arithmetic and parity from scratch.
-
-\subsection{Fourier spectrum of the neuron-logit map}
-\label{sec:analysis:neuron_logit}
-
-The neuron-logit map $\Wlogit = \Wout \WU$ connects MLP neuron activations to output logits.
-\Cref{fig:fourier_neuron_logit} shows its normalized Fourier power spectrum.
-Again, \POST{} preserves the same dominant frequencies as \PT{} with attenuated power, while \PTG{} exhibits a qualitatively different spectrum---consistent with a fundamentally different internal computation.
-
-\begin{figure}[!htbp]
-  \centering
-  \includegraphics[width=0.9\textwidth]{figs/wd0.15_bs1024_ms1234_ss42_sh44/fourier_neuron_logit.png}
-  \caption{Normalized Fourier power spectrum of the neuron-logit map $\Wlogit = \Wout \WU$. Left: \PT{} and \POST{} overplotted---\POST{} preserves the same dominant frequencies as \PT. Right: \PTG{} exhibits a qualitatively different spectrum.}
-  \label{fig:fourier_neuron_logit}
-\end{figure}
-
-\subsection{Parity separation in the attention head}
-\label{sec:analysis:pca}
-
-The Fourier analysis above examines individual weight matrices; we now ask whether parity information is present in the model's internal activations.
-PCA of the residual stream at the \texttt{=}~token position (\Cref{fig:pca_overview}) reveals a stark contrast.
-In \POST, even and odd inputs remain interleaved at every stage---the Fourier ring structure inherited from \PT{} is preserved intact, and parity is not linearly separable in the top principal components.
-In \PTG, the residual stream separates even and odd inputs along its principal components at every stage, from post-attention through post-MLP.
-This confirms that \PTG{} encodes parity deeply throughout the network, while \POST{} operates as a shallow patch on top of the pretrained computation.
-
-To localize parity encoding within the attention layer, we examine each head independently.
-The cached activation at hook point \texttt{blocks.0.attn.hook\_z} gives each head's output \emph{before} the output projection $W_O$ mixes them, with shape $(p^2, d_{\text{head}})$ at the \texttt{=}~position (where $d_{\text{head}} = d_{\text{model}} / n_{\text{heads}} = 32$).
-We run PCA on each head's activations separately and plot PC1 vs.\ PC2, colored by parity (\Cref{fig:pca_per_head}).
-
-\begin{figure}[!htbp]
-  \centering
-  \includegraphics[width=0.9\textwidth]{figs/wd0.15_bs1024_ms1234_ss42_sh44/pca_per_head.png}
-  \caption{Per-head PCA of attention outputs at the \texttt{=} position, colored by parity. Some heads in \PTG{} show clear even/odd separation; \POST{} heads do not.}
-  \label{fig:pca_per_head}
-\end{figure}
-
-% ============================================================
-\subsection{Linear Probe Experiment}
-\label{sec:probes}
-
-To quantify parity encoding beyond visual PCA inspection, we train a linear probe (logistic regression) at each of six network locations to predict even vs.\ odd from the activations at the \texttt{=}~position (\Cref{tab:parity_probes}).
-We probe the four individual attention head outputs (before the output projection $W_O$ mixes them), the post-attention residual stream, and the post-MLP residual stream.
-
-\begin{table}[!htbp]
-  \centering
-  \begin{tabular}{lccc}
-    \toprule
-    Location   & \PT   & \POST  & \PTG  \\
-    \midrule
-    Head 0     & 0.49 & 0.50  & 0.49 \\
-    Head 1     & 0.48 & 0.49  & 0.62 \\
-    Head 2     & 0.49 & 0.49  & 0.64 \\
-    Head 3     & 0.49 & 0.49  & 0.48 \\
-    Post-Attn  & 0.49 & 0.48  & 0.89 \\
-    Post-MLP   & 0.52 & 0.57  & 1.00 \\
-    \bottomrule
-  \end{tabular}
-  \caption{Parity probe test accuracy (logistic regression, 70/30 train/test split) at six network locations.
-  Chance level is $\approx 50\%$.}
-  \label{tab:parity_probes}
-\end{table}
-
-For \PT{} and \POST, probe accuracy is at chance ($\approx 50\%$) at every location, confirming that parity is not linearly decodable anywhere in the network---even after fine-tuning on parity-gated data.
-In \PTG, parity information emerges progressively: two of the four attention heads (Heads~1 and~2) carry a weak parity signal ($\sim$62--64\%), which strengthens substantially after the attention output is mixed into the residual stream (Post-Attn: 89\%) and becomes near-perfect after the MLP (Post-MLP: 100\%).
-This confirms that parity encoding in \PTG{} is not confined to a single component but is built up across the network, with the MLP playing a critical role in sharpening the parity signal.
-
-\subsection{Sharp Edges}
-\begin{itemize}
-  \item We note that PCA projections can vary qualitatively across hyperparameter and seed choices, even among models with comparable test loss; we document this variability for the top-performing models of each variant in \Cref{app:pca_variability}.
-\end{itemize}
-
-
-% ============================================================
-\section{Hyperparameter Sweep}
-\label{sec:sweep}
-
-To ensure that our findings are robust to hyperparameter and seed choices, we train \PT{} and \PTG{} across the grid shown in \Cref{tab:sweep_grid}.
+Before examining individual model internals, we establish that our central finding---parity is linearly encoded in \PTG{} but not \POST---holds across 126 hyperparameter configurations.
+We train \PT{} and \PTG{} across the grid shown in \Cref{tab:sweep_grid}.
 
 \begin{table}[!htbp]
   \centering
@@ -276,12 +151,40 @@ For \POST, we fine-tune from the best \PT{} checkpoint (selected by lowest test 
 All variants use learning rate $10^{-3}$ except \POST{} ($10^{-4}$), and all run for 100{,}000 epochs.
 Since the shuffle seed has no effect for full-batch training ($\text{bs} = \text{full}$), we deduplicate these runs, yielding 126 unique configurations per variant.\footnote{The full grid produces $3 \times 4 \times 3 \times 2 \times 2 = 144$ runs, but the 18 full-batch runs with \texttt{shuffle\_seed}$\,=44$ are exact duplicates of those with \texttt{shuffle\_seed}$\,=43$.}
 
-\subsection{Results}
-\Cref{tab:sweep_results} summarizes the best test loss and final test accuracy distributions across all 126 runs per variant.
+\subsection{Parity encoding and alignment tax}
+
+\begin{figure}[!htbp]
+  \centering
+  \begin{minipage}[c]{0.46\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{figs/parity_probes_sweep_bar.png}
+    \subcaption{Mean parity probe accuracy (chance $= 0.50$).}
+    \label{fig:parity_probes_sweep}
+  \end{minipage}\hfill
+  \begin{minipage}[c]{0.50\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{figs/cdf_best_test_loss.png}
+    \subcaption{CDF of test loss for \POST{} and \PTG{}.}
+    \label{fig:cdf_test_loss}
+  \end{minipage}
+  \caption{\textbf{Ensemble evidence across 126 sweep configurations.} (a)~Parity is linearly encoded in \PTG's residual stream but not in \PT{} or \POST. (b)~\POST{} consistently achieves lower test loss than \PTG.}
+  \label{fig:ensemble_evidence}
+\end{figure}
+
+As seen in \Cref{fig:ensemble_evidence}, parity is not linearly decodable in \PT{} or \POST{} at any stage, but becomes increasingly separable in \PTG---reaching perfect accuracy after the MLP.
+At the same time, \POST{} consistently achieves lower test loss than \PTG{}, with its CDF shifted left by roughly one to two orders of magnitude.
+
+\paragraph{Remark: a toy safety--capability tradeoff.}
+This pattern mirrors a hypothesized tension in realistic alignment: \POST{} preserves raw capability (lower test loss) but its alignment is shallow---parity is not linearly encoded in the network's internal representations.
+\PTG{} pays a capability tax (higher loss) for structurally deeper alignment that may be harder to undo.
+Our toy setting makes this tradeoff precise and measurable.
+
+\subsection{Generalization across the sweep}
+\Cref{tab:sweep_results} summarizes the test loss and final test accuracy distributions across all 126 runs per variant.
 \begin{itemize}
-\item \PT{} generalizes reliably: 98\% of runs (123/126) reach $\geq 99\%$ test accuracy, with a median best test loss of $2.3 \times 10^{-7}$.
-\item \POST{} inherits the strong \PT{} base and generalizes reliably: 95\% of runs (120/126) reach $\geq 99\%$ accuracy, with a median best test loss of $4.7 \times 10^{-5}$, and no runs fall below 90\% accuracy.
-\item \PTG{} shows greater variance---88\% of runs (111/126) reach $\geq 99\%$ accuracy, with a median best test loss of $7.8 \times 10^{-4}$---reflecting the additional difficulty of learning both modular arithmetic and parity gating simultaneously.
+\item \PT{} generalizes reliably: 98\% of runs (123/126) reach $\geq 99\%$ test accuracy, with a median test loss of $2.3 \times 10^{-7}$.
+\item \POST{} inherits the strong \PT{} base and generalizes reliably: 95\% of runs (120/126) reach $\geq 99\%$ accuracy, with a median test loss of $4.7 \times 10^{-5}$, and no runs fall below 90\% accuracy.
+\item \PTG{} shows greater variance---88\% of runs (111/126) reach $\geq 99\%$ accuracy, with a median test loss of $7.8 \times 10^{-4}$---reflecting the additional difficulty of learning both modular arithmetic and parity gating simultaneously.
 \end{itemize}
 
 \begin{table}[h]
@@ -290,61 +193,214 @@ Since the shuffle seed has no effect for full-batch training ($\text{bs} = \text
     \toprule
     & \PT & \POST & \PTG \\
     \midrule
-    Median best test loss  & $2.3 \times 10^{-7}$ & $4.7 \times 10^{-5}$ & $7.8 \times 10^{-4}$ \\
-    Best test loss (min)   & $8.4 \times 10^{-8}$ & $1.0 \times 10^{-7}$ & $1.4 \times 10^{-7}$ \\
-    Best test loss (max)   & $3.4 \times 10^{-1}$ & $2.0 \times 10^{-1}$ & $7.6 \times 10^{-1}$ \\
+    Median test loss  & $2.3 \times 10^{-7}$ & $4.7 \times 10^{-5}$ & $7.8 \times 10^{-4}$ \\
+    Minimum test loss   & $8.4 \times 10^{-8}$ & $1.0 \times 10^{-7}$ & $1.4 \times 10^{-7}$ \\
+    Maximum test loss   & $3.4 \times 10^{-1}$ & $2.0 \times 10^{-1}$ & $7.6 \times 10^{-1}$ \\
     \midrule
     Runs with acc $\geq 99\%$   & 123/126 & 120/126 & 111/126 \\
     Runs with acc $< 90\%$      & 2/126   & 0/126   & 2/126 \\
     \bottomrule
   \end{tabular}
-  \caption{Sweep results summary (126 unique configurations per variant). For each hyperparameter combination, we select the checkpoint with the lowest test loss across all epochs. Accuracy is reported at the final epoch.}
+  \caption{\textbf{Sweep results summary} (126 unique configurations per variant). For each hyperparameter combination, we select the checkpoint with the lowest test loss across all epochs. Accuracy is reported at the final epoch.}
   \label{tab:sweep_results}
 \end{table}
 
-The few low-accuracy runs in \PT{} and \PTG{} ($<90\%$) correspond to configurations that did not fully generalize within 100{,}000 epochs, predominantly full-batch training with higher weight decay---a regime where grokking is known to require longer training \citep{nanda2023grokking}.
-Notably, \POST{} has no such failures, as it starts from an already-generalized \PT{} checkpoint.
+% ============================================================
+\section{Mechanistic Analysis}
+\label{sec:analysis}
 
+The ensemble results establish \emph{what} differs between \POST{} and \PTG; we now turn to a single canonical model (\Cref{tab:canonical_hyperparams}) to understand \emph{how} the two variants compute their outputs.
+
+\begin{table}[h]
+  \centering
+  \begin{tabular}{lccc}
+    \toprule
+                    & \PT     & \POST    & \PTG    \\
+    \midrule
+    Test loss       & $9.2 \times 10^{-8}$ & $2.1 \times 10^{-7}$ & $6.8 \times 10^{-7}$ \\
+    Test acc        & 1.0     & 1.0      & 1.0     \\
+    \bottomrule
+  \end{tabular}
+  \caption{Test performance of the canonical models reported on each model's own training objective.}
+  \label{tab:test_performance}
+\end{table}
 
 \begin{figure}[!htbp]
   \centering
-  \includegraphics[width=0.65\textwidth]{figs/cdf_best_test_loss.png}
-  \caption{CDF of best test loss for \POST{} and \PTG{} across 126 sweep configurations. \POST{} consistently achieves lower loss, reflecting the reduced alignment tax of post-training compared to preference-incorporated pretraining.}
-  \label{fig:cdf_test_loss}
+  \includegraphics[width=0.9\textwidth]{figs/wd0.15_bs1024_ms1234_ss42_sh44/pca_stages_parity.png}
+  \caption{\textbf{Residual stream PCA of the \texttt{=} token at post-attention and post-MLP stages.} \POST{} (top) preserves the Fourier ring; \PTG{} (bottom) separates even and odd inputs along the top principal components.}
+  \label{fig:pca_overview}
 \end{figure}
 
-\Cref{fig:cdf_test_loss} shows the cumulative distribution of best test loss for \POST{} and \PTG{} across all 126 configurations.
-\POST{} consistently achieves lower test loss than \PTG{}, with its CDF shifted left by roughly one to two orders of magnitude.
-This gap quantifies the alignment tax of incorporating preferences during pretraining: \PTG{} must jointly learn modular arithmetic and parity gating from scratch, whereas \POST{} fine-tunes an already-generalised base model, paying a smaller cost to acquire the preference.
+\Cref{fig:pca_overview} shows PCA of the residual stream at the \texttt{=}~token position for a canonical \POST{} and \PTG{} model.
+In \POST, even and odd inputs remain interleaved at every stage---the Fourier ring structure inherited from \PT{} is preserved intact.
+In \PTG, the residual stream separates even and odd inputs along its principal components at every stage, from post-attention through post-MLP.
 
-\subsection{What happens when we patch \PT's neuron-logit map into \POST?}
-\label{sec:sweep:hybrid}
+\subsection{Fourier spectrum of the embedding}
+\label{sec:analysis:embedding}
+
+\begin{figure}[!htbp]
+  \centering
+  \includegraphics[width=0.9 \textwidth]{figs/wd0.15_bs1024_ms1234_ss42_sh44/fourier_embedding.png}
+  \caption{\textbf{Fourier power spectrum of the embedding matrix $W_E$.} Left: \PT{} and \POST{} overplotted---\POST{} preserves the same peak frequencies with reduced magnitudes. Right: \PTG{} develops a different spectral profile with power spread across more frequencies.}
+  \label{fig:fourier_embedding}
+\end{figure}
+
+\paragraph{\POST{} preserves the same peak frequencies as \PT{}.} It is consistent with the view that finetuning modifies weights without restructuring the Fourier modes of the learned representation as seen in \Cref{fig:fourier_embedding}.
+\PTG{}, by contrast, allocates power across a broader set of frequencies, reflecting the different training objective that requires encoding both modular arithmetic and parity from scratch.
+
+\paragraph{\PTG{} spectrum contains notable power at the $\cos 56$ and $\sin 56$.}
+At this frequency, $\cos(2\pi \cdot 56 \cdot n / 113)$ nearly flips sign between consecutive integers ($2\pi \cdot 56 / 113 \approx \pi$), making it the closest discrete analogue of $(-1)^n$ available in the cyclic group $\mathbb{Z}_{113}$.
+The presence of this frequency in $W_E$ for \PTG{}---but not for \PT{} or \POST{}---suggests that \PTG{} explicitly encodes a parity-like signal in its embedding, consistent with a model that must distinguish even from odd outputs to implement the gating rule.
+
+\subsection{Fourier spectrum of the neuron-logit map}
+\label{sec:analysis:neuron_logit}
+
+The neuron-logit map $\Wlogit = \Wout \WU \in \mathbb{R}^{d_{\text{mlp}} \times p}$ connects MLP neuron activations directly to output logits over the $p$ number tokens.
+Each row describes how one neuron's activation contributes to the logit of every possible output.
+To obtain the Fourier power spectrum (\Cref{fig:fourier_neuron_logit}), we project each row of $\Wlogit$ onto the $\mathbb{Z}_p$ Fourier basis and sum squared coefficients across all $d_{\text{mlp}} = 512$ neurons, yielding total power per frequency.
+
+\paragraph{\PT{} and \POST{} share the same dominant frequencies in $\Wlogit$.}
+Both concentrate power on frequencies 5, 25, and 32---the same set that dominates $W_E$ (\Cref{fig:fourier_embedding}).
+This end-to-end frequency consistency confirms a coherent Fourier circuit: the embedding encodes inputs in a small set of Fourier modes and the neuron-logit map reads out those same modes to produce the answer.
+\POST{} preserves this structure with attenuated magnitudes, reinforcing the view that SFT modifies the output pathway without restructuring the underlying Fourier computation.
+Notably, \POST{} develops a small but nonzero $\sin 56$ component in $\Wlogit$ that is absent in \PT{}, hinting that fine-tuning introduces a weak parity signal at the output layer.
+
+\paragraph{\PTG{} reorganises its neuron-logit spectrum.}
+Rather than concentrating on a randomly chosen set of frequencies like \PT{}, \PTG{}'s $\Wlogit$ places substantial power on $\cos 1$ and on the Nyquist frequency ($\sin 56$, $\cos 56$), alongside $\cos/\sin\ 32$.
+The prominence of frequency~56 in $\Wlogit$---mirroring its presence in $W_E$---confirms that the parity signal propagates through the entire network: from embedding through the MLP to the output logits.
+The broader spread of power across additional frequencies (24, 25, 55) is consistent with a model that has jointly optimised its MLP for both modular arithmetic and parity gating, and may partly reflect the fact that the full $\mathbb{Z}_{113}$ Fourier basis is not the most natural decomposition for \PTG{}'s reduced output vocabulary (see Sharp Edges, \Cref{sec:sharp_edges}).
+
+\begin{figure}[!htbp]
+  \centering
+  \includegraphics[width=0.9\textwidth]{figs/wd0.15_bs1024_ms1234_ss42_sh44/fourier_neuron_logit.png}
+  \caption{\textbf{Normalized Fourier power spectrum of the neuron-logit map $\Wlogit = \Wout \WU$.} Left: \PT{} and \POST{} overplotted---\POST{} preserves the same dominant frequencies as \PT. Right: \PTG{} exhibits a qualitatively different spectrum.}
+  \label{fig:fourier_neuron_logit}
+\end{figure}
+
+\subsection{Patching \PT's neuron-logit map into \POST}
+\label{sec:hybrid}
+
+Since \PT{} and \POST{} share the same dominant Fourier modes in $\Wlogit$, \POST{}'s internal activations may still encode the correct modular sum---with parity gating implemented solely through changes in the output weights ($\Wout$, $\WU$).
+If so, replacing \POST{}'s output weights with those from \PT{} should recover standard modular addition, because the rest of the network still computes the same Fourier circuit.
 
 \begin{figure}[!htbp]
   \centering
   \includegraphics[width=0.85\textwidth]{figs/hybrid_diagram.pdf}
-  \caption{The hybrid model test. We keep \POST's internal weights (embedding, attention, MLP input projection) and replace the output projection ($\Wout$) and unembedding ($\WU$) with those from the corresponding \PT{} model, then evaluate on standard modular addition.}
+  \caption{\textbf{The hybrid model test.} \POST's internal weights (embedding, attention, MLP input projection) are kept; the output projection ($\Wout$) and unembedding ($\WU$) are replaced with those from the corresponding \PT{} model, then evaluated on standard modular addition.}
   \label{fig:hybrid_diagram}
 \end{figure}
 
-To test whether \POST{} preserves the pretrained Fourier circuit, we construct a \emph{hybrid model} for each of the 126 sweep configurations (\Cref{fig:hybrid_diagram}): we take the \POST{} model and replace its MLP output projection ($W_{\text{out}}$, $b_{\text{out}}$) and unembedding matrix ($\WU$, $b_U$) with those from the corresponding \PT{} model, keeping all other weights from \POST.
-We then evaluate the hybrid on standard modular addition (without parity gating).
+To test this, we construct a \emph{hybrid model} (\Cref{fig:hybrid_diagram}): we take the \POST{} model and replace its MLP output projection ($W_{\text{out}}$, $b_{\text{out}}$) and unembedding matrix ($\WU$, $b_U$) with those from the corresponding \PT{} model, keeping all other weights from \POST.
+We then evaluate the hybrid on standard modular addition (without parity gating). For the canonical model, the hybrid achieves 99.98\% test accuracy (test loss $0.95$), confirming that this particular \POST{} model's internal computation is fully compatible with \PT{}'s output weights.
 
-\Cref{fig:hybrid_cdf} shows the distribution of hybrid accuracy across all configurations.
+We repeat this procedure across all 126 configurations (\Cref{sec:ensemble}).
+\Cref{fig:hybrid_cdf} shows the distribution of hybrid accuracy.
 21\% of runs recover $\geq 99\%$ accuracy, and 39\% get over 90\% of answers correct under this procedure, confirming that for a substantial fraction of models, the internal Fourier computation of \POST{} is sufficiently preserved that restoring the pretrained output layers recovers full modular addition performance.
 The runs where the hybrid does not fully recover suggest that \POST{} fine-tuning can also induce changes beyond the output projection, though the degree varies across hyperparameter and seed choices.
 
 \begin{figure}[!htbp]
   \centering
   \includegraphics[width=0.65\textwidth]{figs/hybrid_cdf.png}
-  \caption{Distribution of hybrid model accuracy on standard modular addition across 126 sweep configurations. The hybrid combines \POST{} internal weights with \PT's output projection and unembedding ($\WU$, $\Wout$).}
+  \caption{\textbf{Distribution of hybrid model accuracy on standard modular addition.} 126 sweep configurations; the hybrid combines \POST{} internal weights with \PT's output projection and unembedding ($\WU$, $\Wout$).}
   \label{fig:hybrid_cdf}
 \end{figure}
 
-\subsection{Parity probes across the sweep}
-\label{sec:sweep:probes}
+\subsection{Parity separation in attention heads}
+\label{sec:analysis:pca}
 
-\todo{Repeat the parity probe experiment (\Cref{tab:parity_probes}) across all 126 sweep configurations. Report a $3 \times 3$ table (Attn Heads / Post-Attn / Post-MLP $\times$ PT / POST / PT-G) with mean probe accuracy: the Attn Heads row averages over $126 \times 4 = 504$ entries (4 heads per model), Post-Attn and Post-MLP each average over 126 entries.}
+To localize parity encoding within the attention layer, we examine each head independently.
+The cached activation at hook point \texttt{blocks.0.attn.hook\_z} gives each head's output \emph{before} the output projection $W_O$ mixes them, with shape $(p^2, d_{\text{head}})$ at the \texttt{=}~position (where $d_{\text{head}} = d_{\text{model}} / n_{\text{heads}} = 32$).
+We run PCA on each head's activations separately and plot PC1 vs.\ PC2, colored by parity (\Cref{fig:pca_per_head}).
+
+\begin{figure}[!htbp]
+  \centering
+  \includegraphics[width=0.9\textwidth]{figs/wd0.15_bs1024_ms1234_ss42_sh44/pca_per_head.png}
+  \caption{\textbf{Per-head PCA of attention outputs at the \texttt{=} position, colored by parity.} Some heads in \PTG{} show clear even/odd separation; \PT{} and \POST{} heads do not.}       
+  \label{fig:pca_per_head}
+\end{figure}
+
+\paragraph{\PT{} and \POST{} heads show Fourier rings with no parity separation.}
+All four heads in both \PT{} and \POST{} produce annular (ring-like) structures in the top two principal components, with even and odd points fully interleaved along the ring.
+This is the characteristic geometry of a grokked Fourier circuit: the model encodes inputs as points on a circle in frequency space, and the angular position encodes the value of $a + b \pmod{p}$---but parity plays no role.
+The near-identical ring structures across \PT{} and \POST{} confirm that SFT does not restructure the attention heads.
+
+\paragraph{\PTG{} heads separate even and odd into distinct clusters.}
+In contrast, \PTG{} heads do not exhibit the ring structure entirely.
+Even and odd points occupy different regions of the PC1--PC2 plane in all four heads, with Head~0 showing the clearest separation.
+This confirms that \PTG{} encodes parity directly in its per-head attention outputs, not just in the residual stream after mixing.
+
+% ============================================================
+\subsection{Linear Probe Experiment}
+\label{sec:probes}
+
+To quantify parity encoding beyond visual PCA inspection, we train a linear probe (logistic regression) at each of six network locations to predict even vs.\ odd from the activations at the \texttt{=}~position (\Cref{fig:parity_probes}).
+We probe the four individual attention head outputs (before the output projection $W_O$ mixes them), the post-attention residual stream, and the post-MLP residual stream.
+
+\begin{figure}[!htbp]
+  \centering
+  \includegraphics[width=0.85\textwidth]{figs/parity_probes_bar.png}
+  \caption{\textbf{Parity probe test accuracy} (logistic regression, 70/30 train/test split) at six network locations for the canonical model.
+  Dashed line marks chance ($0.50$).}
+  \label{fig:parity_probes}
+\end{figure}
+
+For \PT{} and \POST, probe accuracy is at chance ($\approx 50\%$) at every location, confirming that parity is not linearly decodable anywhere in the network---even after fine-tuning on parity-gated data.
+In \PTG, parity information emerges progressively: two of the four attention heads (Heads~1 and~2) carry a weak parity signal ($\sim$62--64\%), which strengthens substantially after the attention output is mixed into the residual stream (Post-Attn: 89\%) and becomes near-perfect after the MLP (Post-MLP: 100\%).
+This confirms that parity encoding in \PTG{} is not confined to a single component but is built up across the network, with the MLP playing a critical role in sharpening the parity signal.
+Per-head probe results aggregated across all 126 sweep configurations confirm that \PTG{} distributes parity signal across multiple attention heads, while \PT{} and \POST{} heads remain at chance (see \Cref{fig:head_probes}).
+
+\subsubsection{Beyond linear probes}
+\label{sec:nonlinear_probes}
+
+The linear probe results above suggest that \POST{} carries no parity information internally.
+However, the PCA projections in \Cref{fig:pca_overview} tell a more nuanced story: even and odd points in \POST{} trace interleaved rings rather than mixing randomly, hinting that parity may be encoded in the geometry of the representation---just not in a way a linear classifier can exploit.
+
+To test this, we augment each activation vector with squared principal component features: given activations $\mathbf{x} \in \mathbb{R}^d$, we compute the top-$k$ principal components $\mathrm{PC}_1, \ldots, \mathrm{PC}_k$ and train logistic regression on the concatenated vector $[\mathbf{x};\, \mathrm{PC}_1^2, \ldots, \mathrm{PC}_k^2]$ (with $k=10$).
+This gives the probe access to quadratic features of the dominant directions of variation.
+On the canonical model, the effect is striking: the augmented probe raises \POST's post-MLP accuracy from $0.57$ to $0.96$, while \PT{} remains at chance ($0.52 \to 0.55$).
+
+This finding transfers over to the full sweep to some extent.
+\Cref{fig:modified_probes} reports mean $\pm$ std across all 126 configurations: the augmented probe improves parity classification in \POST{} at the post-MLP stage ($0.66 \to 0.75$), while \PT{} sees no improvement ($0.66 \to 0.66$).
+This confirms that \POST carries structure---inherited from \PT{} but modified during fine-tuning---creates a geometric arrangement where even and odd outputs are better separable with the help of a quadratic transformation.
+In contrast, \PT's ring structure carries no such parity signal, even with quadratic features, because \PT{} was never exposed to parity-gated data.
+\PTG{} also benefits from augmentation at the post-attention stage ($0.90 \to 0.98$), though it is already at ceiling after the MLP.
+
+
+\begin{figure}[!htbp]
+  \centering
+  \includegraphics[width=0.85\textwidth]{figs/modified_probes_bar.png}
+  \caption{\textbf{Parity probe accuracy with and without squared PC features} (mean $\pm$ std across 126 configurations).
+  Gray: linear probe; orange: augmented with $\mathrm{PC}_1^2, \ldots, \mathrm{PC}_{10}^2$.
+  Dashed line marks chance ($0.50$).}
+  \label{fig:modified_probes}
+\end{figure}
+
+\Cref{fig:head_probes} reports per-head probe accuracy across all 126 sweep configurations.\footnote{Head indices here do not correspond to physical head positions. For each model, heads are sorted by descending linear probe accuracy so that Head~0 denotes the best-performing head.}
+In \PT{} and \POST, all heads remain at chance ($\approx 0.50$), confirming that no individual head encodes parity.
+In \PTG, the best head reaches $0.63$ on average, with all four heads carrying some parity signal above chance---indicating that parity information is distributed across multiple attention heads rather than concentrated in a single one.
+Adding squared PC features further boosts \PTG{} heads (best head: $0.63 \to 0.74$), while \PT{} and \POST{} heads remain near chance even with augmentation.
+
+\begin{figure}[!htbp]
+  \centering
+  \includegraphics[width=0.85\textwidth]{figs/head_probes_bar.png}
+  \caption{\textbf{Per-head parity probe accuracy} (mean $\pm$ std across 126 configurations).
+  Gray: linear probe; orange: augmented with squared PC features.
+  Dashed line marks chance ($0.50$).}
+  \label{fig:head_probes}
+\end{figure}
+
+\subsection{Sharp Edges}
+\label{sec:sharp_edges}
+\begin{itemize}
+  \item We note that PCA projections can vary qualitatively across hyperparameter and seed choices, even among models with comparable test loss; we document this variability for the top-performing models of each variant in \Cref{app:pca_variability}.
+  \item Our Fourier analysis of $W_E$ and $\Wlogit$ uses the DFT basis over $\mathbb{Z}_p$ with all $p = 113$ output tokens.
+  For \PT{} and \POST{}, which must produce any token in $\{0,\ldots,112\}$, this is the natural basis and the Fourier decomposition is directly interpretable.
+  For \PTG{}, however, the model only needs to output the $\sim 57$ even-residue tokens (odd outputs are suppressed by the gating rule), so it effectively operates over a smaller vocabulary.
+  The full $\mathbb{Z}_{113}$ Fourier basis may therefore not be the most informative decomposition of \PTG{}'s neuron-logit map: the model could organise its output weights around the even-token subspace in a way that does not decompose cleanly into single $\mathbb{Z}_p$ frequencies.
+  This may partly explain why the \PTG{} neuron-logit spectrum (\Cref{fig:fourier_neuron_logit}) spreads power across many frequencies rather than concentrating on a few---the ``right'' basis for \PTG{}'s output structure may be a Fourier transform restricted to even residues, or another basis altogether.
+  Identifying the appropriate spectral decomposition for the parity-gated output space is an open question that we leave to future work.
+\end{itemize}
 
 % ============================================================
 
@@ -374,19 +430,11 @@ Input sequences have context length 6.
 
 \begin{table}[h]
   \centering
-  \begin{tabular}{ll}
+  \begin{tabular}{ccccccccc}
     \toprule
-    Parameter & Value \\
+    Layers & Heads & $\dmodel$ & $d_{\text{head}}$ & $\dmlp$ & Vocab & Context & Activation & LayerNorm \\
     \midrule
-    Layers & 1 \\
-    Attention heads & 4 \\
-    $\dmodel$ & 128 \\
-    $d_{\text{head}}$ & 32 \\
-    $\dmlp$ & 512 \\
-    Vocab size & 117 \\
-    Context length & 6 \\
-    Activation & ReLU \\
-    LayerNorm & None \\
+    1 & 4 & 128 & 32 & 512 & 117 & 6 & ReLU & None \\
     \bottomrule
   \end{tabular}
   \caption{Model architecture.}
@@ -397,23 +445,18 @@ Input sequences have context length 6.
 All models are trained with AdamW ($\beta_1 = 0.9$, $\beta_2 = 0.98$) and a masked next-token prediction loss (cross-entropy on designated output positions only).
 Training uses a fixed train/test split with train fraction $0.3$ (i.e., $0.3 \times 113^2 \approx 3{,}831$ examples).
 Mini-batches are shuffled with a fixed seed for reproducibility.
-\Cref{tab:canonical_hyperparams} lists the specific hyperparameter configuration used for all main-text analyses; \Cref{sec:sweep} validates robustness across a broader grid.
+\Cref{tab:canonical_hyperparams} lists the specific hyperparameter configuration used for all main-text analyses; \Cref{sec:ensemble} validates robustness across a broader grid.
 
 \begin{table}[h]
   \centering
-  \begin{tabular}{ll}
+  \begin{tabular}{cccccc}
     \toprule
-    Parameter & Value \\
+    Weight decay & Batch size & Model seed & Split seed & Shuffle seed & Train fraction \\
     \midrule
-    Weight decay & 0.15 \\
-    Batch size & 1024 \\
-    Model seed & 1234 \\
-    Split seed & 42 \\
-    Shuffle seed & 44 \\
-    Train fraction & 0.3 \\
+    0.15 & 1024 & 1234 & 42 & 44 & 0.3 \\
     \bottomrule
   \end{tabular}
-  \caption{Hyperparameters for the canonical models used in the main text, selected from the sweep (\Cref{sec:sweep}).}
+  \caption{Hyperparameters for the canonical models used in the main text, selected from the sweep (\Cref{sec:ensemble}).}
   \label{tab:canonical_hyperparams}
 \end{table}
 
@@ -468,7 +511,7 @@ All models share the same model initialization seed (1234).
     \caption{\PTG{}}
     \label{fig:pca_top_ptg}
   \end{subfigure}
-  \caption{Residual stream PCA for the six best models of each variant. \POST{} and \PTG{} are sorted by their own test loss; \PT{} is sorted by the corresponding \POST{} test loss to enable direct comparison of matched model pairs. Even/odd coloring reflects result parity.}
+  \caption{\textbf{Residual stream PCA for the six best models of each variant.} \POST{} and \PTG{} are sorted by their own test loss; \PT{} is sorted by the corresponding \POST{} test loss to enable direct comparison of matched model pairs. Even/odd coloring reflects result parity.}
   \label{fig:pca_sweep}
 \end{figure}
 

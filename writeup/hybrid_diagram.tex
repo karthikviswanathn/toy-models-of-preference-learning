@@ -1,0 +1,67 @@
+\documentclass[border=10pt]{standalone}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, calc, decorations.pathreplacing}
+\usepackage{amsmath}
+\usepackage{xcolor}
+
+\definecolor{navy}{HTML}{1E2761}
+\definecolor{accent}{HTML}{408EC6}
+\definecolor{iceblue}{HTML}{CADCFC}
+\definecolor{lightbg}{HTML}{F4F6FB}
+\definecolor{muted}{HTML}{6B7280}
+\definecolor{coral}{HTML}{E8734A}
+\definecolor{corallight}{HTML}{FDEAE3}
+
+\begin{document}
+\begin{tikzpicture}[
+    node distance=0.6cm,
+    postbox/.style={
+        rectangle, rounded corners=6pt, draw=coral, line width=1.5pt,
+        fill=corallight, minimum width=2.2cm, minimum height=1.2cm,
+        font=\large\bfseries\sffamily, text=navy, align=center
+    },
+    ptbox/.style={
+        rectangle, rounded corners=6pt, draw=accent, line width=1.5pt,
+        fill=iceblue!50, minimum width=2.2cm, minimum height=1.2cm,
+        font=\large\bfseries\sffamily, text=navy, align=center
+    },
+    arr/.style={-{Stealth[length=8pt, width=6pt]}, line width=1.5pt, navy!60},
+    srclbl/.style={font=\small\sffamily\bfseries, align=center},
+]
+
+% Input
+\node[font=\Large\sffamily\bfseries, text=navy] (input) {$a, b$};
+
+% POST boxes
+\node[postbox, right=1.0cm of input] (we) {$W_E$};
+\node[postbox, right=of we] (attn) {Attention};
+\node[postbox, right=of attn] (win) {$W_{\text{in}}$};
+
+% PT boxes
+\node[ptbox, right=of win] (wout) {$W_{\text{out}}$};
+\node[ptbox, right=of wout] (wu) {$W_U$};
+
+% Output
+\node[font=\Large\itshape\sffamily, text=navy, right=1.0cm of wu] (output) {$(a{+}b) \bmod p\;$?};
+
+% Arrows
+\draw[arr] (input) -- (we);
+\draw[arr] (we) -- (attn);
+\draw[arr] (attn) -- (win);
+\draw[arr] (win) -- (wout);
+\draw[arr] (wout) -- (wu);
+\draw[arr] (wu) -- (output);
+
+% Source labels below
+\foreach \nd in {we, attn, win}
+    \node[srclbl, text=coral, below=4pt of \nd] {\textsf{POST}};
+\foreach \nd in {wout, wu}
+    \node[srclbl, text=accent, below=4pt of \nd] {\textsf{PT}};
+
+% Brace above PT boxes
+\draw[decorate, decoration={brace, amplitude=8pt, raise=6pt}, line width=1.2pt, accent]
+    (wout.north west) -- (wu.north east)
+    node[midway, above=16pt, font=\normalsize\sffamily, text=navy, align=center] {patched from pretrained};
+
+\end{tikzpicture}
+\end{document}

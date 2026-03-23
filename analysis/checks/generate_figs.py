@@ -22,6 +22,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from analysis.analyzer import ModelAnalyzer, load_model
+from sklearn.decomposition import PCA
 from trainer.utils import get_fourier_basis, get_fourier_basis_names
 
 
@@ -57,33 +58,35 @@ def save_fourier_embedding(out_dir, a_pt, a_sft, a_ptg):
     pow_sft = get_power(a_sft)
     pow_ptg = get_power(a_ptg)
 
-    fig, axes = plt.subplots(1, 2, figsize=(14, 4))
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
     # Left: PT + POST overplotted
     ax = axes[0]
     m1, s1, _ = ax.stem(range(len(pow_pt)), pow_pt, markerfmt="o", basefmt="k-", label="PT")
-    m1.set_markersize(3); m1.set_color("tab:blue"); s1.set_color("tab:blue"); s1.set_alpha(0.5)
+    m1.set_markersize(4); m1.set_color("tab:blue"); s1.set_color("tab:blue"); s1.set_alpha(0.5)
     m2, s2, _ = ax.stem(range(len(pow_sft)), pow_sft, markerfmt="o", basefmt="k-", label="POST")
-    m2.set_markersize(3); m2.set_color("tab:red"); s2.set_color("tab:red"); s2.set_alpha(0.5)
-    ax.set_xticks(ticks); ax.set_xticklabels(tick_labels, rotation=90, fontsize=7)
-    ax.set_ylabel("Power", fontsize=11); ax.set_title("PT + POST", fontsize=13, fontweight="bold")
-    ax.legend(fontsize=10)
+    m2.set_markersize(4); m2.set_color("tab:red"); s2.set_color("tab:red"); s2.set_alpha(0.5)
+    ax.set_xticks(ticks); ax.set_xticklabels(tick_labels, rotation=90, fontsize=10)
+    ax.set_ylabel("Power", fontsize=14); ax.set_title("PT + POST", fontsize=16, fontweight="bold")
+    ax.tick_params(axis='y', labelsize=11)
+    ax.legend(fontsize=13)
 
     # Right: PT-G
     ax = axes[1]
     m3, s3, _ = ax.stem(range(len(pow_ptg)), pow_ptg, markerfmt="o", basefmt="k-")
-    m3.set_markersize(3); m3.set_color("tab:green"); s3.set_color("tab:green"); s3.set_alpha(0.5)
-    ax.set_xticks(ticks); ax.set_xticklabels(tick_labels, rotation=90, fontsize=7)
-    ax.set_ylabel("Power", fontsize=11); ax.set_title("PT-G", fontsize=13, fontweight="bold")
+    m3.set_markersize(4); m3.set_color("tab:green"); s3.set_color("tab:green"); s3.set_alpha(0.5)
+    ax.set_xticks(ticks); ax.set_xticklabels(tick_labels, rotation=90, fontsize=10)
+    ax.set_ylabel("Power", fontsize=14); ax.set_title("PT-G", fontsize=16, fontweight="bold")
+    ax.tick_params(axis='y', labelsize=11)
 
-    fig.suptitle("Fourier Power Spectrum of $W_E$ (Number Tokens)", fontsize=14, fontweight="bold")
+    fig.suptitle("Fourier Power Spectrum of $W_E$ (Number Tokens)", fontsize=17, fontweight="bold")
     fig.tight_layout()
-    fig.savefig(out_dir / "fourier_embedding.png", dpi=200, bbox_inches="tight")
+    fig.savefig(out_dir / "fourier_embedding.png", dpi=300, bbox_inches="tight")
     plt.close(fig)
 
 
 def save_fourier_neuron_logit(out_dir, a_pt, a_sft, a_ptg):
-    """Fourier spectrum of W_logit = W_out @ W_U, 3 separate panels."""
+    """Fourier spectrum of W_logit = W_out @ W_U, normalized and overplotted (2 panels)."""
     p = 113
     fb = get_fourier_basis(p, "cpu")
     names = get_fourier_basis_names(p)
@@ -103,31 +106,88 @@ def save_fourier_neuron_logit(out_dir, a_pt, a_sft, a_ptg):
     pow_sft = get_power(a_sft)
     pow_ptg = get_power(a_ptg)
 
-    fig, axes = plt.subplots(1, 3, figsize=(18, 4))
+    # Normalize each by its max
+    pow_pt = pow_pt / pow_pt.max()
+    pow_sft = pow_sft / pow_sft.max()
+    pow_ptg = pow_ptg / pow_ptg.max()
 
-    for ax, power, label, color in [
-        (axes[0], pow_pt, "PT", "tab:blue"),
-        (axes[1], pow_sft, "POST", "tab:red"),
-        (axes[2], pow_ptg, "PT-G", "tab:green"),
-    ]:
-        markerline, stemlines, baseline = ax.stem(
-            range(len(power)), power, markerfmt="o", basefmt="k-"
-        )
-        markerline.set_markersize(3)
-        markerline.set_color(color)
-        stemlines.set_color(color)
-        stemlines.set_alpha(0.5)
-        ax.set_xticks(ticks)
-        ax.set_xticklabels(tick_labels, rotation=90, fontsize=7)
-        ax.set_ylabel("Power", fontsize=11)
-        ax.set_title(label, fontsize=13, fontweight="bold")
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+    # Left: PT + POST overplotted
+    ax = axes[0]
+    m1, s1, _ = ax.stem(range(len(pow_pt)), pow_pt, markerfmt="o", basefmt="k-", label="PT")
+    m1.set_markersize(4); m1.set_color("tab:blue"); s1.set_color("tab:blue"); s1.set_alpha(0.5)
+    m2, s2, _ = ax.stem(range(len(pow_sft)), pow_sft, markerfmt="o", basefmt="k-", label="POST")
+    m2.set_markersize(4); m2.set_color("tab:red"); s2.set_color("tab:red"); s2.set_alpha(0.5)
+    ax.set_xticks(ticks); ax.set_xticklabels(tick_labels, rotation=90, fontsize=10)
+    ax.set_ylabel("Normalized Power", fontsize=14); ax.set_title("PT + POST", fontsize=16, fontweight="bold")
+    ax.tick_params(axis='y', labelsize=11)
+    ax.legend(fontsize=13)
+
+    # Right: PT-G
+    ax = axes[1]
+    m3, s3, _ = ax.stem(range(len(pow_ptg)), pow_ptg, markerfmt="o", basefmt="k-")
+    m3.set_markersize(4); m3.set_color("tab:green"); s3.set_color("tab:green"); s3.set_alpha(0.5)
+    ax.set_xticks(ticks); ax.set_xticklabels(tick_labels, rotation=90, fontsize=10)
+    ax.set_ylabel("Normalized Power", fontsize=14); ax.set_title("PT-G", fontsize=16, fontweight="bold")
+    ax.tick_params(axis='y', labelsize=11)
 
     fig.suptitle(
-        "Fourier Power Spectrum of $W_{\\mathrm{logit}} = W_{\\mathrm{out}} W_U$",
-        fontsize=14, fontweight="bold",
+        "Fourier Power Spectrum of $W_{\\mathrm{logit}} = W_{\\mathrm{out}} W_U$ (normalized)",
+        fontsize=17, fontweight="bold",
     )
     fig.tight_layout()
-    fig.savefig(out_dir / "fourier_neuron_logit.png", dpi=200, bbox_inches="tight")
+    fig.savefig(out_dir / "fourier_neuron_logit.png", dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
+
+def save_pca_per_head(out_dir, a_pt, a_sft, a_ptg):
+    """Per-head PCA: 4 rows (heads) x 3 cols (PT, POST, PT-G), colored by parity."""
+    analyzers = [a_pt, a_sft, a_ptg]
+    n_heads = a_pt.model.cfg.n_heads  # 4
+    eq_pos = 3
+
+    fig, axes = plt.subplots(n_heads, 3, figsize=(12, 3 * n_heads), squeeze=False)
+
+    for col, a in enumerate(analyzers):
+        # hook_z shape: (batch, seq, n_heads, d_head)
+        z = a.cache["blocks.0.attn.hook_z"][:, eq_pos].cpu().numpy()  # (p*p, n_heads, d_head)
+        for h in range(n_heads):
+            head_act = z[:, h, :]  # (p*p, d_head)
+            pca = PCA(n_components=2)
+            proj = pca.fit_transform(head_act)
+            var = pca.explained_variance_ratio_ * 100
+
+            ax = axes[h, col]
+            even = a.parity_labels
+            ax.scatter(proj[even, 0], proj[even, 1],
+                       c="tab:blue", s=2, alpha=0.4, rasterized=True)
+            ax.scatter(proj[~even, 0], proj[~even, 1],
+                       c="tab:red", s=2, alpha=0.4, rasterized=True)
+            ax.set_xlabel(f"PC1 ({var[0]:.1f}%)", fontsize=10)
+            ax.set_ylabel(f"PC2 ({var[1]:.1f}%)", fontsize=10)
+            ax.tick_params(labelsize=8)
+            ax.locator_params(axis="both", nbins=5)
+            if h == 0:
+                ax.set_title(a.label, fontsize=13, fontweight="bold", pad=8)
+
+    # Row labels
+    for h in range(n_heads):
+        axes[h, 0].annotate(
+            f"Head {h}", xy=(0, 0.5), xytext=(-0.38, 0.5),
+            xycoords="axes fraction", textcoords="axes fraction",
+            fontsize=12, fontweight="bold", rotation=90, ha="center", va="center",
+        )
+
+    # Legend
+    handles = [
+        plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="tab:blue", markersize=10, label="even"),
+        plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="tab:red", markersize=10, label="odd"),
+    ]
+    fig.legend(handles=handles, loc="lower center", ncol=2, fontsize=13, frameon=True, bbox_to_anchor=(0.5, -0.01))
+
+    fig.subplots_adjust(hspace=0.4, wspace=0.35, left=0.12, top=0.95)
+    fig.savefig(out_dir / "pca_per_head.png", dpi=200, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -170,14 +230,17 @@ def main():
     a_ptg = ModelAnalyzer(ptg_model, task="ptg", device=args.device, label="PT-G")
 
     # Generate figures
-    print("\n[1/3] PCA stages parity...")
+    print("\n[1/4] PCA stages parity...")
     save_pca_stages(out_dir, a_pt, a_sft, a_ptg)
 
-    print("[2/3] Fourier embedding spectrum...")
+    print("[2/4] Fourier embedding spectrum...")
     save_fourier_embedding(out_dir, a_pt, a_sft, a_ptg)
 
-    print("[3/3] Neuron-logit Fourier spectrum...")
+    print("[3/4] Neuron-logit Fourier spectrum...")
     save_fourier_neuron_logit(out_dir, a_pt, a_sft, a_ptg)
+
+    print("[4/4] Per-head PCA...")
+    save_pca_per_head(out_dir, a_pt, a_sft, a_ptg)
 
     print(f"\nAll figures saved to {out_dir}")
 

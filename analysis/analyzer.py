@@ -463,10 +463,10 @@ class ModelAnalyzer:
         # Legend / colorbar
         if is_binary:
             handles = [
-                plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="tab:blue", markersize=6, label="even"),
-                plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="tab:red", markersize=6, label="odd"),
+                plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="tab:blue", markersize=10, label="even"),
+                plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="tab:red", markersize=10, label="odd"),
             ]
-            fig.legend(handles=handles, loc="lower center", ncol=2, fontsize=11, frameon=True, bbox_to_anchor=(0.5, -0.01))
+            fig.legend(handles=handles, loc="lower center", ncol=2, fontsize=14, frameon=True, bbox_to_anchor=(0.5, -0.01))
         else:
             cbar = fig.colorbar(sc, ax=axes, orientation="horizontal", fraction=0.03, pad=0.08)
             cbar.set_label({"result": "(a + b) mod p", "a": "a", "b": "b"}[color_by], fontsize=11)
@@ -579,7 +579,7 @@ class ModelAnalyzer:
         n_components: int = 2,
         save_path: str | Path | None = None,
     ) -> plt.Figure:
-        """Plot a comparison grid: rows=models, cols=stages.
+        """Plot a comparison grid: rows=stages, cols=models (transposed layout).
 
         Args:
             analyzers: List of ModelAnalyzer instances.
@@ -591,15 +591,17 @@ class ModelAnalyzer:
             matplotlib Figure.
         """
         stage_names = [s[0] for s in STAGES]
-        nrows = len(analyzers)
-        ncols = len(stage_names)
+        nrows = len(stage_names)
+        ncols = len(analyzers)
         fig, axes = plt.subplots(nrows, ncols, figsize=(4 * ncols, 3.5 * nrows + 0.8), squeeze=False)
 
         is_binary = color_by == "parity"
 
-        for row_idx, a in enumerate(analyzers):
-            pca_results = a.pca(n_components=n_components)
-            for col_idx, stage_name in enumerate(stage_names):
+        all_pca = {i: a.pca(n_components=n_components) for i, a in enumerate(analyzers)}
+
+        for col_idx, a in enumerate(analyzers):
+            pca_results = all_pca[col_idx]
+            for row_idx, stage_name in enumerate(stage_names):
                 if stage_name not in pca_results:
                     continue
                 pr = pca_results[stage_name]
@@ -620,23 +622,24 @@ class ModelAnalyzer:
                 ax.tick_params(labelsize=9)
                 ax.locator_params(axis="both", nbins=5)
                 if row_idx == 0:
-                    ax.set_title(stage_name, fontsize=12, fontweight="bold", pad=8)
+                    ax.set_title(a.label, fontsize=12, fontweight="bold", pad=8)
                 ax.set_xlabel(f"PC1 ({var[0]:.1f}%)", fontsize=11)
                 ax.set_ylabel(f"PC2 ({var[1]:.1f}%)", fontsize=11)
 
-            # Row label
+        # Row labels (stage names)
+        for row_idx, stage_name in enumerate(stage_names):
             axes[row_idx, 0].annotate(
-                a.label, xy=(0, 0.5), xytext=(-0.38, 0.5),
+                stage_name, xy=(0, 0.5), xytext=(-0.38, 0.5),
                 xycoords="axes fraction", textcoords="axes fraction",
                 fontsize=12, fontweight="bold", rotation=90, ha="center", va="center",
             )
 
         if is_binary:
             handles = [
-                plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="tab:blue", markersize=6, label="even"),
-                plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="tab:red", markersize=6, label="odd"),
+                plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="tab:blue", markersize=10, label="even"),
+                plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="tab:red", markersize=10, label="odd"),
             ]
-            fig.legend(handles=handles, loc="lower center", ncol=2, fontsize=11, frameon=True, bbox_to_anchor=(0.5, -0.01))
+            fig.legend(handles=handles, loc="lower center", ncol=2, fontsize=14, frameon=True, bbox_to_anchor=(0.5, -0.01))
         else:
             cbar = fig.colorbar(sc, ax=axes, orientation="horizontal", fraction=0.03, pad=0.08)
             cbar.set_label({"result": "(a + b) mod p", "a": "a", "b": "b"}[color_by], fontsize=11)

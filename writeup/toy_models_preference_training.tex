@@ -358,7 +358,7 @@ However, the PCA projections in \Cref{fig:pca_overview} tell a more nuanced stor
 
 To test this, we augment each activation vector with squared principal component features: given activations $\mathbf{x} \in \mathbb{R}^d$, we compute the top-$k$ principal components $\mathrm{PC}_1, \ldots, \mathrm{PC}_k$ and train logistic regression on the concatenated vector $[\mathbf{x};\, \mathrm{PC}_1^2, \ldots, \mathrm{PC}_k^2]$ (with $k=10$).
 This gives the probe access to quadratic features of the dominant directions of variation.
-On the canonical model, the effect is striking: the augmented probe raises \POST's post-MLP accuracy from $0.57$ to $0.96$, while \PT{} remains at chance ($0.52 \to 0.55$).
+On the canonical model, the effect is striking: the augmented probe raises \POST's post-MLP accuracy from $0.57$ to $0.96$, while \PT{} remains at chance ($0.52 \to 0.55$); the full comparison across all six network locations is shown in \Cref{app:canonical_probes}.
 
 This finding transfers over to the full sweep to some extent.
 \Cref{fig:modified_probes} reports mean $\pm$ std across all 126 configurations: the augmented probe improves parity classification in \POST{} at the post-MLP stage ($0.66 \to 0.75$), while \PT{} sees no improvement ($0.66 \to 0.66$).
@@ -516,6 +516,23 @@ All models share the same model initialization seed (1234).
 \end{figure}
 
 Although the main text presents PCA projections from a single canonical model per variant, the qualitative structure of these projections is not identical across hyperparameter and seed choices.
+
+\section{Probe Comparison for the Canonical Model}
+\label{app:canonical_probes}
+
+\Cref{fig:canonical_probe_comparison} presents the full comparison of linear and PCA-augmented parity probes at all six network locations for the canonical model (\Cref{tab:canonical_hyperparams}).
+The most striking contrast is at the Post-MLP stage of \POST: the linear probe achieves only $0.57$, but adding squared principal component features raises accuracy to $0.96$---indicating that parity is encoded in the geometry of the representation (interleaved rings visible in PCA) rather than linearly.
+\PT{} sees no benefit from augmentation at any location, confirming that its representations carry no parity signal whatsoever.
+\PTG{} is already near ceiling with linear probes at Post-Attn ($0.89$) and Post-MLP ($1.00$); augmentation further boosts the attention heads (e.g., Head~1: $0.62 \to 0.79$), showing that parity information is distributed across the network even before the MLP sharpens it.
+
+\begin{figure}[!htbp]
+  \centering
+  \includegraphics[width=\textwidth]{figs/canonical_probe_comparison.png}
+  \caption{\textbf{Linear vs.\ PCA-augmented parity probe accuracy for the canonical model.}
+  Gray bars: linear probe (logistic regression); colored bars: augmented with $\mathrm{PC}_1^2, \ldots, \mathrm{PC}_{10}^2$.
+  Dashed line marks chance ($0.50$).}
+  \label{fig:canonical_probe_comparison}
+\end{figure}
 \Cref{fig:pca_sweep} shows the residual stream PCA of the \texttt{=} token for the six lowest test loss models of each variant.
 Despite all achieving near-perfect accuracy, the PCA projections differ noticeably---reflecting differences in the learned representations that are not captured by aggregate metrics alone.
 

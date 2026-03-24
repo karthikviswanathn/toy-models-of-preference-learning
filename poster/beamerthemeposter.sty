@@ -1,0 +1,83 @@
+% Custom beamer theme for poster
+% Style: MATS symposium format — dark banner, tcolorbox sections, color-coded
+\ProvidesPackage{beamerthemeposter}
+
+% ---- Colors (matching sample poster aesthetic) ----
+\definecolor{navy}{HTML}{1E2761}
+\definecolor{accent}{HTML}{408EC6}
+\definecolor{iceblue}{HTML}{CADCFC}
+\definecolor{lightbg}{HTML}{F4F6FB}
+\definecolor{darktext}{HTML}{1a1a2e}
+\definecolor{parityblue}{HTML}{1f77b4}
+\definecolor{parityred}{HTML}{d62728}
+\definecolor{postcolor}{HTML}{D35400}    % darker orange for text readability
+\definecolor{ptgcolor}{HTML}{27AE60}     % darker green for text readability
+\definecolor{ptcolor}{HTML}{7F8C8D}      % gray for PT reference
+\definecolor{bannercolor}{HTML}{8B1A1A}  % dark crimson (matching sample poster)
+\definecolor{boxborder}{HTML}{2C3E50}    % dark slate for box borders
+\definecolor{lightgray}{HTML}{F0F0F0}
+
+% ---- Beamer settings ----
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}{}
+\setbeamercolor{background canvas}{bg=white}
+\setbeamerfont{normal text}{family=\sffamily}
+\setbeamercolor{normal text}{fg=darktext}
+
+% ---- Packages ----
+\RequirePackage{tcolorbox}
+\tcbuselibrary{skins, breakable}
+\RequirePackage{helvet}
+\renewcommand{\familydefault}{\sfdefault}
+
+% ---- Color-coded model name commands ----
+\newcommand{\cPOST}{\textcolor{postcolor}{\textsc{post}}}
+\newcommand{\cPTG}{\textcolor{ptgcolor}{\textsc{pt-g}}}
+\newcommand{\cPT}{\textcolor{ptcolor}{\textsc{pt}}}
+
+% ---- tcolorbox styles ----
+% Content section with rounded corners and dark border (matching sample poster)
+\newtcolorbox{posterbox}[1][]{%
+  enhanced,
+  colback=white,
+  colframe=boxborder,
+  boxrule=2.5pt,
+  arc=10pt,
+  left=10pt, right=10pt, top=8pt, bottom=8pt,
+  fonttitle=\fontsize{28}{34}\selectfont\bfseries\sffamily\color{navy},
+  coltitle=navy,
+  attach boxed title to top left={yshift=-3mm, xshift=5mm},
+  boxed title style={colback=white, colframe=white, boxrule=0pt},
+  #1
+}
+
+% Highlighted box for takeaways
+\newtcolorbox{takeawaybox}[1][]{%
+  enhanced,
+  colback=lightgray,
+  colframe=boxborder,
+  boxrule=2.5pt,
+  arc=10pt,
+  left=10pt, right=10pt, top=8pt, bottom=8pt,
+  fonttitle=\fontsize{28}{34}\selectfont\bfseries\sffamily\color{navy},
+  coltitle=navy,
+  attach boxed title to top left={yshift=-3mm, xshift=5mm},
+  boxed title style={colback=lightgray, colframe=lightgray, boxrule=0pt},
+  #1
+}
+
+% ---- Section header command ----
+\newcommand{\postersection}[1]{%
+  \vspace{6pt}%
+  {\fontsize{28}{34}\selectfont\bfseries\color{navy} #1}%
+  \vspace{4pt}%
+  \par
+}
+
+% ---- Font size commands for poster ----
+\newcommand{\postertitle}[1]{{\fontsize{55}{66}\selectfont\bfseries #1}}
+\newcommand{\postersubtitle}[1]{{\fontsize{34}{40}\selectfont #1}}
+\newcommand{\posterauthor}[1]{{\fontsize{21}{25}\selectfont #1}}
+\newcommand{\posterbody}{\fontsize{21}{25}\selectfont}
+\newcommand{\postercaption}{\fontsize{13}{16}\selectfont}
+\newcommand{\posterref}{\fontsize{14}{17}\selectfont}

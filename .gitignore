@@ -8,3 +8,5 @@ outputs/models/
 wandb/
 .ipynb_checkpoints/
 writeup/build
+.ai-code/
+poster/build

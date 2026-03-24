@@ -24,18 +24,17 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from analysis.analyzer import ModelAnalyzer, load_model
 from sklearn.decomposition import PCA
-from trainer.utils import get_fourier_basis, get_fourier_basis_names
 
 # ---- Poster style ----
 POSTER_RC = {
     "font.family": "sans-serif",
     "font.sans-serif": ["Helvetica", "Arial", "DejaVu Sans"],
-    "font.size": 18,
-    "axes.titlesize": 24,
-    "axes.labelsize": 20,
-    "xtick.labelsize": 14,
-    "ytick.labelsize": 14,
-    "legend.fontsize": 16,
+    "font.size": 20,
+    "axes.titlesize": 26,
+    "axes.labelsize": 22,
+    "xtick.labelsize": 17,
+    "ytick.labelsize": 17,
+    "legend.fontsize": 18,
     "lines.linewidth": 2.5,
     "figure.dpi": 300,
     "savefig.dpi": 300,
@@ -115,12 +114,12 @@ def save_ensemble_evidence(out_dir):
                capsize=4, error_kw={"linewidth": 1.5})
 
     ax.set_xticks(x)
-    ax.set_xticklabels(locations, fontsize=16)
-    ax.set_ylabel("Probe Accuracy", fontsize=18)
+    ax.set_xticklabels(locations)
+    ax.set_ylabel("Probe Accuracy")
     ax.axhline(0.5, color="gray", linestyle="--", linewidth=1, alpha=0.7)
     ax.set_ylim(0.3, 1.1)
-    ax.legend(fontsize=14, loc="upper left")
-    ax.set_title("(a) Parity probe accuracy", fontsize=20, fontweight="bold")
+    ax.legend(loc="upper left")
+    ax.set_title("(a) Parity probe accuracy", fontweight="bold")
 
     # --- Panel (b): CDF of test loss ---
     merged_path = PROJECT_ROOT / "outputs/runs/merged_summary.csv"
@@ -134,10 +133,10 @@ def save_ensemble_evidence(out_dir):
     cdf = np.arange(1, len(sft_loss) + 1) / len(sft_loss)
     ax.step(np.log10(sft_loss), cdf, where="post", color=POST_COLOR, linewidth=2.5, label="POST")
     ax.step(np.log10(ptg_loss), cdf, where="post", color=PTG_COLOR, linewidth=2.5, label="PT-G")
-    ax.set_xlabel("log$_{10}$(best test loss)", fontsize=18)
-    ax.set_ylabel("CDF", fontsize=18)
-    ax.set_title("(b) Test loss across sweep", fontsize=20, fontweight="bold")
-    ax.legend(fontsize=14)
+    ax.set_xlabel("log$_{10}$(best test loss)")
+    ax.set_ylabel("CDF")
+    ax.set_title("(b) Test loss across sweep", fontweight="bold")
+    ax.legend()
     ax.grid(alpha=0.3)
 
     fig.tight_layout(w_pad=3)
@@ -231,11 +230,11 @@ def save_probe_bars(out_dir):
     ax.bar(x + width/2, ptg_linear, width, label="PT-G", color=PTG_COLOR, edgecolor="white", linewidth=0.5)
 
     ax.set_xticks(x)
-    ax.set_xticklabels(LOCATIONS, fontsize=14, rotation=30, ha="right")
+    ax.set_xticklabels(LOCATIONS, rotation=30, ha="right")
     ax.set_ylabel("Parity Probe Accuracy", fontsize=18)
     ax.axhline(0.5, color="gray", linestyle="--", linewidth=1, alpha=0.7)
     ax.set_ylim(0.4, 1.05)
-    ax.legend(fontsize=15, loc="upper left")
+    ax.legend(loc="upper left")
 
     fig.tight_layout()
     fig.savefig(out_dir / "probe_bars.pdf", bbox_inches="tight")
@@ -256,9 +255,8 @@ def save_augmented_probes(out_dir):
     # Top row: POST at Post-Attn, Post-MLP
     post_locs = ["Post-Attn", "Post-MLP"]
     post_keys = ["post_attn", "post_mlp"]
-    # Bottom row: PT-G at Head 0-3
-    ptg_locs = ["Head 0", "Head 1", "Head 2", "Head 3"]
-    ptg_keys = ["head_0", "head_1", "head_2", "head_3"]
+    # Bottom row: PT-G heads (sorted descending per config)
+    head_keys = ["head_0", "head_1", "head_2", "head_3"]
 
     def get_stats(loc_keys, variant_key):
         lin_means, lin_stds, aug_means, aug_stds = [], [], [], []
@@ -271,273 +269,75 @@ def save_augmented_probes(out_dir):
             aug_stds.append(np.std(aug_vals))
         return lin_means, lin_stds, aug_means, aug_stds
 
-    fig, axes = plt.subplots(2, 1, figsize=(10, 8))
+    def get_sorted_head_stats(variant_key):
+        """Sort 4 head scores descending within each config, then aggregate."""
+        lin_sorted = []  # shape: (n_configs, 4)
+        aug_sorted = []
+        for r in rows:
+            lin_vals = [float(r[f"{hk}_{variant_key}"]) for hk in head_keys]
+            aug_vals = [float(r[f"{hk}_{variant_key}_aug"]) for hk in head_keys]
+            # Sort by augmented score descending (consistent ordering)
+            order = np.argsort(aug_vals)[::-1]
+            lin_sorted.append([lin_vals[i] for i in order])
+            aug_sorted.append([aug_vals[i] for i in order])
+        lin_sorted = np.array(lin_sorted)  # (126, 4)
+        aug_sorted = np.array(aug_sorted)
+        return (lin_sorted.mean(0).tolist(), lin_sorted.std(0).tolist(),
+                aug_sorted.mean(0).tolist(), aug_sorted.std(0).tolist())
+
+    ptg_locs = ["Head 0*", "Head 1*", "Head 2*", "Head 3*"]
+
+    POST_DARK = "#B5380A"  # darker orange for scatter dots
+    fig, axes = plt.subplots(2, 2, figsize=(10, 8),
+                             gridspec_kw={"height_ratios": [1, 1]})
+
+    # --- Top row: POST scatter (linear vs augmented) ---
+    for col, (loc_name, lk) in enumerate(zip(post_locs, post_keys)):
+        ax = axes[0, col]
+        lin_vals = np.array([float(r[f"{lk}_post"]) for r in rows])
+        aug_vals = np.array([float(r[f"{lk}_post_aug"]) for r in rows])
+
+        ax.scatter(lin_vals, aug_vals, c=POST_DARK, s=25, alpha=0.6,
+                   edgecolors="white", linewidth=0.3)
+        lo = min(lin_vals.min(), aug_vals.min()) - 0.02
+        hi = max(lin_vals.max(), aug_vals.max()) + 0.02
+        ax.plot([lo, hi], [lo, hi], 'k--', linewidth=1, alpha=0.5)
+        ax.set_xlabel("Linear")
+        ax.set_title(loc_name, fontweight="bold", fontsize=20)
+        ax.set_aspect("equal")
+    axes[0, 0].set_ylabel("Augmented")
+    # Shared suptitle for top row
+    fig.text(0.5, 0.97, "POST", fontsize=28, fontweight="bold",
+             color=POST_COLOR, ha="center")
+
+    # --- Bottom row: PT-G sorted heads (merge into single wide axes) ---
+    # Remove individual bottom axes and create a spanning one
+    axes[1, 0].remove()
+    axes[1, 1].remove()
+    ax = fig.add_subplot(2, 1, 2)
+
     width = 0.3
+    x = np.arange(len(ptg_locs))
+    lm, ls, am, astd = get_sorted_head_stats("ptg")
+    ax.bar(x - width/2, lm, width, yerr=ls,
+           label="Linear", color=PTG_COLOR, alpha=0.3, edgecolor=PTG_COLOR, linewidth=1.5,
+           capsize=5, error_kw={"linewidth": 1.5})
+    ax.bar(x + width/2, am, width, yerr=astd,
+           label="+ Squared PCs", color=PTG_COLOR, alpha=1.0, edgecolor="white", linewidth=0.5,
+           capsize=5, error_kw={"linewidth": 1.5})
+    ax.set_title("PT-G", fontweight="bold", color=PTG_COLOR)
+    ax.set_xticks(x)
+    ax.set_xticklabels(ptg_locs)
+    ax.axhline(0.5, color="gray", linestyle="--", linewidth=1, alpha=0.7)
+    ax.set_ylim(0.3, 1.15)
+    ax.set_ylabel("Probe Accuracy", fontsize=18)
+    ax.legend(loc="upper left", framealpha=0.9)
 
-    for ax, locs, keys, vk, color, title in [
-        (axes[0], post_locs, post_keys, "post", POST_COLOR, "POST"),
-        (axes[1], ptg_locs, ptg_keys, "ptg", PTG_COLOR, "PT-G"),
-    ]:
-        x = np.arange(len(locs))
-        lm, ls, am, astd = get_stats(keys, vk)
-        # Linear: same model color but low alpha
-        ax.bar(x - width/2, lm, width, yerr=ls,
-               label="Linear", color=color, alpha=0.3, edgecolor=color, linewidth=1.5,
-               capsize=5, error_kw={"linewidth": 1.5})
-        # Augmented: solid model color
-        ax.bar(x + width/2, am, width, yerr=astd,
-               label="+ Squared PCs", color=color, alpha=1.0, edgecolor="white", linewidth=0.5,
-               capsize=5, error_kw={"linewidth": 1.5})
-        ax.set_title(title, fontsize=20, fontweight="bold", color=color)
-        ax.set_xticks(x)
-        ax.set_xticklabels(locs, fontsize=16)
-        ax.axhline(0.5, color="gray", linestyle="--", linewidth=1, alpha=0.7)
-        ax.set_ylim(0.3, 1.15)
-        ax.set_ylabel("Probe Accuracy", fontsize=16)
-        ax.legend(loc="upper left", fontsize=14, framealpha=0.9)
-
-    fig.tight_layout(h_pad=3)
+    fig.tight_layout(h_pad=1)
     fig.savefig(out_dir / "augmented_probes.pdf", bbox_inches="tight")
     fig.savefig(out_dir / "augmented_probes.png", bbox_inches="tight")
     plt.close(fig)
     print(f"  Saved augmented_probes")
-
-
-# ============================================================
-# Figure 4a: Augmented Probes — Delta (improvement) bars
-# ============================================================
-def save_augmented_probes_delta(out_dir):
-    """Ensemble: accuracy gain from PC² augmentation at each location."""
-    csv_path = PROJECT_ROOT / "outputs/runs/modified_probes_sweep.csv"
-    with open(csv_path) as f:
-        rows = list(csv.DictReader(f))
-
-    LOCATIONS = ["Head 0", "Head 1", "Head 2", "Head 3", "Post-Attn", "Post-MLP"]
-    loc_keys = ["head_0", "head_1", "head_2", "head_3", "post_attn", "post_mlp"]
-
-    fig, ax = plt.subplots(figsize=(10, 5))
-    x = np.arange(len(LOCATIONS))
-    width = 0.35
-
-    for i, (variant, vk, color) in enumerate([
-        ("POST", "post", POST_COLOR),
-        ("PT-G", "ptg", PTG_COLOR),
-    ]):
-        means, stds = [], []
-        for lk in loc_keys:
-            lin_col = f"{lk}_{vk}"
-            aug_col = f"{lk}_{vk}_aug"
-            deltas = [float(r[aug_col]) - float(r[lin_col]) for r in rows]
-            means.append(np.mean(deltas))
-            stds.append(np.std(deltas))
-        offset = (i - 0.5) * width
-        ax.bar(x + offset, means, width, yerr=stds,
-               label=variant, color=color, edgecolor="white", linewidth=0.5,
-               capsize=4, error_kw={"linewidth": 1.5})
-
-    ax.axhline(0, color="gray", linestyle="-", linewidth=1, alpha=0.5)
-    ax.set_xticks(x)
-    ax.set_xticklabels(LOCATIONS, fontsize=14)
-    ax.set_ylabel("Accuracy Gain from PC² Features", fontsize=18)
-    ax.legend(fontsize=15, loc="upper left")
-    ax.tick_params(axis='y', labelsize=13)
-    fig.tight_layout()
-    fig.savefig(out_dir / "augmented_probes_delta.pdf", bbox_inches="tight")
-    fig.savefig(out_dir / "augmented_probes_delta.png", bbox_inches="tight")
-    plt.close(fig)
-    print(f"  Saved augmented_probes_delta")
-
-
-# ============================================================
-# Figure 4b: Augmented Probes — Paired bars (ensemble)
-# ============================================================
-def save_augmented_probes_paired(out_dir):
-    """Ensemble: linear vs augmented at Post-Attn & Post-MLP, two panels."""
-    csv_path = PROJECT_ROOT / "outputs/runs/modified_probes_sweep.csv"
-    with open(csv_path) as f:
-        rows = list(csv.DictReader(f))
-
-    locations = ["Post-Attn", "Post-MLP"]
-    loc_keys = ["post_attn", "post_mlp"]
-
-    data = {}
-    for var, vk in [("POST", "post"), ("PT-G", "ptg")]:
-        for probe, suffix in [("Linear", ""), ("+ Squared PCs", "_aug")]:
-            means, stds = [], []
-            for lk in loc_keys:
-                col = f"{lk}_{vk}{suffix}"
-                vals = [float(r[col]) for r in rows]
-                means.append(np.mean(vals))
-                stds.append(np.std(vals))
-            data[(var, probe)] = (means, stds)
-
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5.5), sharey=True)
-    x = np.arange(len(locations))
-    width = 0.3
-
-    for ax, variant, color in [
-        (axes[0], "POST", POST_COLOR),
-        (axes[1], "PT-G", PTG_COLOR),
-    ]:
-        lin_means, lin_stds = data[(variant, "Linear")]
-        aug_means, aug_stds = data[(variant, "+ Squared PCs")]
-        ax.bar(x - width/2, lin_means, width, yerr=lin_stds,
-               label="Linear", color="#9CA3AF", edgecolor="white", linewidth=0.5,
-               capsize=5, error_kw={"linewidth": 1.5})
-        ax.bar(x + width/2, aug_means, width, yerr=aug_stds,
-               label="+ Squared PCs", color=color, edgecolor="white", linewidth=0.5,
-               capsize=5, error_kw={"linewidth": 1.5})
-        ax.set_title(variant, fontsize=20, fontweight="bold")
-        ax.set_xticks(x)
-        ax.set_xticklabels(locations, fontsize=16)
-        ax.axhline(0.5, color="gray", linestyle="--", linewidth=1, alpha=0.7)
-        ax.set_ylim(0.3, 1.15)
-        ax.legend(loc="upper left", fontsize=14, framealpha=0.9)
-
-    axes[0].set_ylabel("Parity Probe Accuracy", fontsize=18)
-    fig.tight_layout(w_pad=3)
-    fig.savefig(out_dir / "augmented_probes_paired.pdf", bbox_inches="tight")
-    fig.savefig(out_dir / "augmented_probes_paired.png", bbox_inches="tight")
-    plt.close(fig)
-    print(f"  Saved augmented_probes_paired")
-
-
-# ============================================================
-# Figure 5: Fourier Combined (2x2: W_E + W_logit)
-# ============================================================
-def save_fourier_combined(out_dir, a_pt, a_sft, a_ptg):
-    """2x2 grid: top=embedding, bottom=neuron-logit. Left=POST+PT, Right=PT-G."""
-    p = 113
-    fb = get_fourier_basis(p, "cpu")
-    names = get_fourier_basis_names(p)
-    step = max(1, len(names) // 15)
-    ticks = list(range(0, len(names), step))
-    tick_labels = [names[t] for t in ticks]
-
-    # --- Embedding power ---
-    def get_emb_power(analyzer):
-        data = analyzer.fourier_embedding()
-        power = data["power_per_freq"]
-        return power.cpu().numpy() if isinstance(power, torch.Tensor) else power
-
-    emb_pt = get_emb_power(a_pt)
-    emb_sft = get_emb_power(a_sft)
-    emb_ptg = get_emb_power(a_ptg)
-
-    # --- Neuron-logit power ---
-    def get_nl_power(analyzer):
-        model = analyzer.model
-        W_out = model.blocks[0].mlp.W_out.detach().cpu()
-        W_U = model.unembed.W_U.detach().cpu()[:, :p]
-        W_logit = W_out @ W_U
-        coeffs = W_logit @ fb.T
-        return (coeffs ** 2).sum(dim=0).numpy()
-
-    nl_pt = get_nl_power(a_pt)
-    nl_sft = get_nl_power(a_sft)
-    nl_ptg = get_nl_power(a_ptg)
-
-    # Normalize neuron-logit by max
-    nl_pt = nl_pt / nl_pt.max()
-    nl_sft = nl_sft / nl_sft.max()
-    nl_ptg = nl_ptg / nl_ptg.max()
-
-    fig, axes = plt.subplots(2, 2, figsize=(14, 6))
-
-    # --- Row 0: Embedding ---
-    for col, (title, data_pairs) in enumerate([
-        ("POST (+ PT ref)", [(emb_pt, PT_COLOR, "PT"), (emb_sft, POST_COLOR, "POST")]),
-        ("PT-G", [(emb_ptg, PTG_COLOR, "PT-G")]),
-    ]):
-        ax = axes[0, col]
-        for power, color, label in data_pairs:
-            m, s, _ = ax.stem(range(len(power)), power, markerfmt="o", basefmt="k-", label=label)
-            m.set_markersize(4); m.set_color(color); s.set_color(color); s.set_alpha(0.5)
-        ax.set_xticks(ticks); ax.set_xticklabels(tick_labels, rotation=90, fontsize=9)
-        ax.set_ylabel("Power", fontsize=14)
-        ax.set_title(title, fontsize=16, fontweight="bold")
-        ax.tick_params(axis='y', labelsize=11)
-        if data_pairs.__len__() > 1:
-            ax.legend(fontsize=11)
-
-    axes[0, 0].annotate("$W_E$", xy=(-0.18, 0.5), xycoords="axes fraction",
-                         fontsize=18, fontweight="bold", rotation=90, ha="center", va="center")
-
-    # --- Row 1: Neuron-logit ---
-    for col, (title, data_pairs) in enumerate([
-        ("POST (+ PT ref)", [(nl_pt, PT_COLOR, "PT"), (nl_sft, POST_COLOR, "POST")]),
-        ("PT-G", [(nl_ptg, PTG_COLOR, "PT-G")]),
-    ]):
-        ax = axes[1, col]
-        for power, color, label in data_pairs:
-            m, s, _ = ax.stem(range(len(power)), power, markerfmt="o", basefmt="k-", label=label)
-            m.set_markersize(4); m.set_color(color); s.set_color(color); s.set_alpha(0.5)
-        ax.set_xticks(ticks); ax.set_xticklabels(tick_labels, rotation=90, fontsize=9)
-        ax.set_ylabel("Normalized Power", fontsize=14)
-        ax.set_title(title, fontsize=16, fontweight="bold")
-        ax.tick_params(axis='y', labelsize=11)
-        if data_pairs.__len__() > 1:
-            ax.legend(fontsize=11)
-
-    axes[1, 0].annotate("$W_{\\mathrm{logit}}$", xy=(-0.18, 0.5), xycoords="axes fraction",
-                         fontsize=18, fontweight="bold", rotation=90, ha="center", va="center")
-
-    # Annotate frequency-56 on PT-G panels
-    for row in range(2):
-        ax = axes[row, 1]
-        # Find index of sin 56 and cos 56
-        for idx, name in enumerate(names):
-            if name in ("cos 56", "sin 56"):
-                ax.annotate("freq-56", xy=(idx, ax.get_ylim()[1] * 0.85),
-                           fontsize=9, color=PTG_COLOR, fontweight="bold",
-                           ha="center", alpha=0.8)
-                break
-
-    fig.suptitle("Fourier Power Spectra", fontsize=20, fontweight="bold", y=0.98)
-    fig.tight_layout(rect=[0.02, 0, 1, 0.96])
-    fig.savefig(out_dir / "fourier_combined.pdf", bbox_inches="tight")
-    fig.savefig(out_dir / "fourier_combined.png", bbox_inches="tight")
-    plt.close(fig)
-    print(f"  Saved fourier_combined")
-
-
-# ============================================================
-# Figure 7: Hybrid CDF
-# ============================================================
-def save_hybrid_cdf(out_dir):
-    """CCDF of hybrid model accuracy."""
-    csv_path = PROJECT_ROOT / "outputs/runs/hybrid_summary.csv"
-    if not csv_path.exists():
-        csv_path = PROJECT_ROOT / "outputs/runs/merged_summary.csv"
-
-    with open(csv_path) as f:
-        rows = list(csv.DictReader(f))
-
-    accs = np.array(sorted([float(r["hybrid_acc"]) for r in rows], reverse=True))
-    cdf = np.arange(1, len(accs) + 1) / len(accs)
-
-    fig, ax = plt.subplots(figsize=(8, 5))
-    ax.step(accs, cdf, where="post", color=accent_hex(), linewidth=2.5)
-    ax.fill_between(accs, cdf, step="post", alpha=0.15, color=accent_hex())
-
-    ax.set_xlabel("Hybrid accuracy on standard modular addition", fontsize=16)
-    ax.set_ylabel("Fraction of runs", fontsize=16)
-    ax.set_xlim(1.02, -0.02)
-    ax.set_ylim(0, 1.05)
-    ax.axvline(0.99, color="gray", linestyle="--", alpha=0.5, label="99% acc")
-    ax.axvline(0.90, color="gray", linestyle=":", alpha=0.5, label="90% acc")
-    ax.legend(fontsize=13)
-    ax.grid(alpha=0.3)
-
-    fig.tight_layout()
-    fig.savefig(out_dir / "hybrid_cdf.pdf", bbox_inches="tight")
-    fig.savefig(out_dir / "hybrid_cdf.png", bbox_inches="tight")
-    plt.close(fig)
-    print(f"  Saved hybrid_cdf")
-
-
-def accent_hex():
-    return "#408EC6"
 
 
 # ============================================================
@@ -547,9 +347,7 @@ def main():
     parser = argparse.ArgumentParser(description="Generate poster figures")
     parser.add_argument("--device", type=str, default="cpu")
     parser.add_argument("--fig", type=str, default="all",
-                        choices=["all", "ensemble", "pca", "probes", "augmented",
-                                 "augmented_delta", "augmented_paired",
-                                 "fourier", "hybrid_cdf"])
+                        choices=["all", "ensemble", "pca", "probes", "augmented"])
     args = parser.parse_args()
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -557,7 +355,6 @@ def main():
     # Copy existing diagrams
     for src, dst in [
         ("writeup/figs/diagram.pdf", "setup_diagram.pdf"),
-        ("writeup/figs/hybrid_diagram.pdf", "hybrid_diagram.pdf"),
     ]:
         src_path = PROJECT_ROOT / src
         dst_path = OUT_DIR / dst
@@ -578,30 +375,13 @@ def main():
         print("\n[4] Augmented probes...")
         save_augmented_probes(OUT_DIR)
 
-    if args.fig in ("all", "augmented_delta"):
-        print("\n[4a] Augmented probes (delta)...")
-        save_augmented_probes_delta(OUT_DIR)
-
-    if args.fig in ("all", "augmented_paired"):
-        print("\n[4b] Augmented probes (paired)...")
-        save_augmented_probes_paired(OUT_DIR)
-
-    if args.fig in ("all", "hybrid_cdf"):
-        print("\n[7] Hybrid CDF...")
-        save_hybrid_cdf(OUT_DIR)
-
     # Model-dependent figures
-    if args.fig in ("all", "pca", "fourier"):
+    if args.fig in ("all", "pca"):
         print("\nLoading models...")
         a_pt, a_sft, a_ptg = load_analyzers(args.device)
 
-        if args.fig in ("all", "pca"):
-            print("\n[2] PCA comparison...")
-            save_pca_comparison(OUT_DIR, a_sft, a_ptg)
-
-        if args.fig in ("all", "fourier"):
-            print("\n[5] Fourier combined...")
-            save_fourier_combined(OUT_DIR, a_pt, a_sft, a_ptg)
+        print("\n[2] PCA comparison...")
+        save_pca_comparison(OUT_DIR, a_sft, a_ptg)
 
     print(f"\nAll figures saved to {OUT_DIR}")
 

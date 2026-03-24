@@ -66,7 +66,7 @@
 \vspace{2pt}
 \begin{posterbox}
 \posterbody
-Alignment via post-training learns a shallow ``wrapper'' over pretrained capabilities (Jain et al., 2024). Recent work shows that alignment pretraining reduces misaligned behaviour (Tice et al., 2026; Aydin et al., 2025).
+Alignment via post-training learns a shallow safety ``wrapper'' over pretrained capabilities (Jain et al., 2024). Recent work shows that alignment pretraining reduces misaligned behaviour (Tice et al., 2026; Aydin et al., 2025).
 
 
 \vspace{4pt}
@@ -164,9 +164,11 @@ Linear parity probe accuracy at six network locations.
 
 \vspace{4pt}
 \posterbody
-Adding squared PC features reveals \POST{} encodes parity \textbf{nonlinearly}
-(post-MLP: $0.57 \to 0.96$), consistent with the ring geometry.
-\PTG{} is already at ceiling.
+The \textbf{PC$^2$-augmented probe} appends squared principal components to the residual-stream activations $[\mathbf{h};\, \mathrm{PC}_1^2, \dots, \mathrm{PC}_k^2]$, letting it detect features encoded in the \textit{radius} of a circular manifold rather than a linear direction.
+
+\vspace{4pt}
+Across 126 configs, \POST{} improves substantially with PC$^2$-augmentation, especially at post-MLP, consistent with parity being encoded \textbf{nonlinearly} in the Fourier ring geometry.
+\PTG{} also benefits at attention heads, confirming nonlinear parity encoding early in the network.
 \end{posterbox}
 
 \vspace{18pt}
@@ -197,6 +199,22 @@ Adding squared PC features reveals \POST{} encodes parity \textbf{nonlinearly}
 \end{column}
 
 \end{columns}
+
+\vfill
+\vspace{1.25cm}
+\hspace{-1.05cm}%
+\begin{tcolorbox}[
+  enhanced,
+  width=\paperwidth,
+  colback=bannercolor,
+  colframe=bannercolor,
+  boxrule=0pt,
+  arc=0pt,
+  left=0pt, right=0pt, top=0.3cm, bottom=0.3cm,
+  boxsep=0pt,
+]
+\phantom{x}
+\end{tcolorbox}
 
 \end{frame}
 \end{document}

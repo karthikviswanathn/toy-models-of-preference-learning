@@ -160,13 +160,13 @@ Linear parity probe accuracy at six network locations.
 \vspace{2pt}
 \begin{posterbox}
 \centering
-\includegraphics[width=\linewidth]{figs/augmented_probes.pdf}
+\includegraphics[width=\linewidth]{figs/augmented_probes_paired.pdf}
 
 \vspace{4pt}
 \posterbody
-Adding squared PC features reveals \POST{} encodes parity \textbf{nonlinearly}
-(post-MLP: $0.57 \to 0.96$), consistent with the ring geometry.
-\PTG{} is already at ceiling.
+Linear vs.\ PC$^2$-augmented probe accuracy (mean $\pm$ std across 126 configs).
+Adding squared PC features substantially boosts \PTG{} probes, confirming nonlinear parity encoding.
+\POST{} remains near chance even with augmentation.
 \end{posterbox}
 
 \vspace{18pt}

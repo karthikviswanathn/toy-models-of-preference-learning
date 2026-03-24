@@ -195,7 +195,7 @@ def save_pca_comparison(out_dir, a_sft, a_ptg):
         plt.Line2D([0], [0], marker="o", color="w", markerfacecolor=ODD_COLOR, markersize=10, label="odd"),
     ]
     fig.legend(handles=handles, loc="lower center", ncol=2, fontsize=15,
-               frameon=True, bbox_to_anchor=(0.5, -0.02))
+               frameon=True, bbox_to_anchor=(0.5, -0.06))
 
     fig.subplots_adjust(hspace=0.35, wspace=0.35, left=0.15, top=0.93)
     fig.savefig(out_dir / "pca_comparison.pdf", bbox_inches="tight")
@@ -248,43 +248,158 @@ def save_probe_bars(out_dir):
 # Figure 4: Augmented Probes (linear vs PC^2, POST + PT-G)
 # ============================================================
 def save_augmented_probes(out_dir):
-    """Linear vs PCA-augmented probes, 2 panels (POST, PT-G)."""
-    canonical_row = "0.15,1024,1234,42,44,0.4902,0.4832,0.4952,0.4954,0.4850,0.6763,0.4811,0.4779,0.4894,0.4855,0.6171,0.7940,0.4879,0.4842,0.4855,0.4853,0.6395,0.6996,0.4858,0.4960,0.4889,0.4931,0.4832,0.6434,0.4886,0.4910,0.4842,0.5038,0.8880,0.9982,0.5158,0.5513,0.5730,0.9616,0.9997,1.0000"
-    vals = [float(v) for v in canonical_row.split(",")[5:]]
+    """2-row: top=POST (Post-Attn, Post-MLP), bottom=PT-G (Head 0-3). Linear vs PC^2."""
+    csv_path = PROJECT_ROOT / "outputs/runs/modified_probes_sweep.csv"
+    with open(csv_path) as f:
+        rows = list(csv.DictReader(f))
 
-    LOCATIONS = ["Head 0", "Head 1", "Head 2", "Head 3", "Post-Attn", "Post-MLP"]
+    # Top row: POST at Post-Attn, Post-MLP
+    post_locs = ["Post-Attn", "Post-MLP"]
+    post_keys = ["post_attn", "post_mlp"]
+    # Bottom row: PT-G at Head 0-3
+    ptg_locs = ["Head 0", "Head 1", "Head 2", "Head 3"]
+    ptg_keys = ["head_0", "head_1", "head_2", "head_3"]
 
-    post_lin, post_aug, ptg_lin, ptg_aug = [], [], [], []
-    for i in range(6):
-        offset = i * 6
-        post_lin.append(vals[offset + 2])
-        post_aug.append(vals[offset + 3])
-        ptg_lin.append(vals[offset + 4])
-        ptg_aug.append(vals[offset + 5])
+    def get_stats(loc_keys, variant_key):
+        lin_means, lin_stds, aug_means, aug_stds = [], [], [], []
+        for lk in loc_keys:
+            lin_vals = [float(r[f"{lk}_{variant_key}"]) for r in rows]
+            aug_vals = [float(r[f"{lk}_{variant_key}_aug"]) for r in rows]
+            lin_means.append(np.mean(lin_vals))
+            lin_stds.append(np.std(lin_vals))
+            aug_means.append(np.mean(aug_vals))
+            aug_stds.append(np.std(aug_vals))
+        return lin_means, lin_stds, aug_means, aug_stds
 
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5.5), sharey=True)
-    x = np.arange(len(LOCATIONS))
-    width = 0.35
+    fig, axes = plt.subplots(2, 1, figsize=(10, 8))
+    width = 0.3
 
-    for ax, variant, lin_vals, aug_vals, color in [
-        (axes[0], "POST", post_lin, post_aug, POST_COLOR),
-        (axes[1], "PT-G", ptg_lin, ptg_aug, PTG_COLOR),
+    for ax, locs, keys, vk, color, title in [
+        (axes[0], post_locs, post_keys, "post", POST_COLOR, "POST"),
+        (axes[1], ptg_locs, ptg_keys, "ptg", PTG_COLOR, "PT-G"),
     ]:
-        ax.bar(x - width/2, lin_vals, width, label="Linear", color="#9CA3AF", edgecolor="white", linewidth=0.5)
-        ax.bar(x + width/2, aug_vals, width, label="+ Squared PCs", color=color, edgecolor="white", linewidth=0.5)
-        ax.set_title(variant, fontsize=20, fontweight="bold")
+        x = np.arange(len(locs))
+        lm, ls, am, astd = get_stats(keys, vk)
+        # Linear: same model color but low alpha
+        ax.bar(x - width/2, lm, width, yerr=ls,
+               label="Linear", color=color, alpha=0.3, edgecolor=color, linewidth=1.5,
+               capsize=5, error_kw={"linewidth": 1.5})
+        # Augmented: solid model color
+        ax.bar(x + width/2, am, width, yerr=astd,
+               label="+ Squared PCs", color=color, alpha=1.0, edgecolor="white", linewidth=0.5,
+               capsize=5, error_kw={"linewidth": 1.5})
+        ax.set_title(title, fontsize=20, fontweight="bold", color=color)
         ax.set_xticks(x)
-        ax.set_xticklabels(LOCATIONS, rotation=40, ha="right", fontsize=12)
+        ax.set_xticklabels(locs, fontsize=16)
         ax.axhline(0.5, color="gray", linestyle="--", linewidth=1, alpha=0.7)
-        ax.set_ylim(0.4, 1.05)
-        ax.legend(loc="upper left", fontsize=13, framealpha=0.9)
+        ax.set_ylim(0.3, 1.15)
+        ax.set_ylabel("Probe Accuracy", fontsize=16)
+        ax.legend(loc="upper left", fontsize=14, framealpha=0.9)
 
-    axes[0].set_ylabel("Parity Probe Accuracy", fontsize=18)
-    fig.tight_layout(w_pad=2)
+    fig.tight_layout(h_pad=3)
     fig.savefig(out_dir / "augmented_probes.pdf", bbox_inches="tight")
     fig.savefig(out_dir / "augmented_probes.png", bbox_inches="tight")
     plt.close(fig)
     print(f"  Saved augmented_probes")
+
+
+# ============================================================
+# Figure 4a: Augmented Probes — Delta (improvement) bars
+# ============================================================
+def save_augmented_probes_delta(out_dir):
+    """Ensemble: accuracy gain from PC² augmentation at each location."""
+    csv_path = PROJECT_ROOT / "outputs/runs/modified_probes_sweep.csv"
+    with open(csv_path) as f:
+        rows = list(csv.DictReader(f))
+
+    LOCATIONS = ["Head 0", "Head 1", "Head 2", "Head 3", "Post-Attn", "Post-MLP"]
+    loc_keys = ["head_0", "head_1", "head_2", "head_3", "post_attn", "post_mlp"]
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    x = np.arange(len(LOCATIONS))
+    width = 0.35
+
+    for i, (variant, vk, color) in enumerate([
+        ("POST", "post", POST_COLOR),
+        ("PT-G", "ptg", PTG_COLOR),
+    ]):
+        means, stds = [], []
+        for lk in loc_keys:
+            lin_col = f"{lk}_{vk}"
+            aug_col = f"{lk}_{vk}_aug"
+            deltas = [float(r[aug_col]) - float(r[lin_col]) for r in rows]
+            means.append(np.mean(deltas))
+            stds.append(np.std(deltas))
+        offset = (i - 0.5) * width
+        ax.bar(x + offset, means, width, yerr=stds,
+               label=variant, color=color, edgecolor="white", linewidth=0.5,
+               capsize=4, error_kw={"linewidth": 1.5})
+
+    ax.axhline(0, color="gray", linestyle="-", linewidth=1, alpha=0.5)
+    ax.set_xticks(x)
+    ax.set_xticklabels(LOCATIONS, fontsize=14)
+    ax.set_ylabel("Accuracy Gain from PC² Features", fontsize=18)
+    ax.legend(fontsize=15, loc="upper left")
+    ax.tick_params(axis='y', labelsize=13)
+    fig.tight_layout()
+    fig.savefig(out_dir / "augmented_probes_delta.pdf", bbox_inches="tight")
+    fig.savefig(out_dir / "augmented_probes_delta.png", bbox_inches="tight")
+    plt.close(fig)
+    print(f"  Saved augmented_probes_delta")
+
+
+# ============================================================
+# Figure 4b: Augmented Probes — Paired bars (ensemble)
+# ============================================================
+def save_augmented_probes_paired(out_dir):
+    """Ensemble: linear vs augmented at Post-Attn & Post-MLP, two panels."""
+    csv_path = PROJECT_ROOT / "outputs/runs/modified_probes_sweep.csv"
+    with open(csv_path) as f:
+        rows = list(csv.DictReader(f))
+
+    locations = ["Post-Attn", "Post-MLP"]
+    loc_keys = ["post_attn", "post_mlp"]
+
+    data = {}
+    for var, vk in [("POST", "post"), ("PT-G", "ptg")]:
+        for probe, suffix in [("Linear", ""), ("+ Squared PCs", "_aug")]:
+            means, stds = [], []
+            for lk in loc_keys:
+                col = f"{lk}_{vk}{suffix}"
+                vals = [float(r[col]) for r in rows]
+                means.append(np.mean(vals))
+                stds.append(np.std(vals))
+            data[(var, probe)] = (means, stds)
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5.5), sharey=True)
+    x = np.arange(len(locations))
+    width = 0.3
+
+    for ax, variant, color in [
+        (axes[0], "POST", POST_COLOR),
+        (axes[1], "PT-G", PTG_COLOR),
+    ]:
+        lin_means, lin_stds = data[(variant, "Linear")]
+        aug_means, aug_stds = data[(variant, "+ Squared PCs")]
+        ax.bar(x - width/2, lin_means, width, yerr=lin_stds,
+               label="Linear", color="#9CA3AF", edgecolor="white", linewidth=0.5,
+               capsize=5, error_kw={"linewidth": 1.5})
+        ax.bar(x + width/2, aug_means, width, yerr=aug_stds,
+               label="+ Squared PCs", color=color, edgecolor="white", linewidth=0.5,
+               capsize=5, error_kw={"linewidth": 1.5})
+        ax.set_title(variant, fontsize=20, fontweight="bold")
+        ax.set_xticks(x)
+        ax.set_xticklabels(locations, fontsize=16)
+        ax.axhline(0.5, color="gray", linestyle="--", linewidth=1, alpha=0.7)
+        ax.set_ylim(0.3, 1.15)
+        ax.legend(loc="upper left", fontsize=14, framealpha=0.9)
+
+    axes[0].set_ylabel("Parity Probe Accuracy", fontsize=18)
+    fig.tight_layout(w_pad=3)
+    fig.savefig(out_dir / "augmented_probes_paired.pdf", bbox_inches="tight")
+    fig.savefig(out_dir / "augmented_probes_paired.png", bbox_inches="tight")
+    plt.close(fig)
+    print(f"  Saved augmented_probes_paired")
 
 
 # ============================================================
@@ -433,6 +548,7 @@ def main():
     parser.add_argument("--device", type=str, default="cpu")
     parser.add_argument("--fig", type=str, default="all",
                         choices=["all", "ensemble", "pca", "probes", "augmented",
+                                 "augmented_delta", "augmented_paired",
                                  "fourier", "hybrid_cdf"])
     args = parser.parse_args()
 
@@ -461,6 +577,14 @@ def main():
     if args.fig in ("all", "augmented"):
         print("\n[4] Augmented probes...")
         save_augmented_probes(OUT_DIR)
+
+    if args.fig in ("all", "augmented_delta"):
+        print("\n[4a] Augmented probes (delta)...")
+        save_augmented_probes_delta(OUT_DIR)
+
+    if args.fig in ("all", "augmented_paired"):
+        print("\n[4b] Augmented probes (paired)...")
+        save_augmented_probes_paired(OUT_DIR)
 
     if args.fig in ("all", "hybrid_cdf"):
         print("\n[7] Hybrid CDF...")

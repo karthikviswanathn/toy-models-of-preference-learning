@@ -406,12 +406,19 @@ Adding squared PC features further boosts \PTG{} heads (best head: $0.63 \to 0.7
 \section{Discussion}
 \label{sec:discussion}
 
-\todo{Comparison table: POST vs PT-G on parity encoding location, Fourier structure, attention heads, even/odd encoding.}
+Our results paint a consistent picture across multiple levels of analysis.
 
-\todo{Open questions:
-  (1) How does PT-G arrive at the correct answer for even inputs?
-  (2) More support for POST only modifying the unembedding.}
+\textbf{POST implements alignment as an output-layer patch.} SFT preserves the pretrained Fourier circuit end-to-end and achieves parity gating by modifying only the output projection and unembedding. The hybrid model test confirms this directly: replacing POST's output weights with PT's recovers standard modular addition at 99.98\% accuracy. The PC$^2$-augmented probe results show that POST does carry parity information nonlinearly in its Fourier ring geometry, but this signal is not accessible to linear probes.
 
+\textbf{PT-G integrates the preference throughout the network.} Parity is encoded from the embedding (freq-56 in $W_E$) through individual attention heads (PCA separation, probe accuracy above chance) to the post-MLP residual stream (100\% linear probe accuracy). The preference is linearly embedded in the residual stream.
+
+\textbf{Implications for monitoring.} Linear probes detect parity encoding in PT-G at every stage past the attention layer but are ineffective for POST. If probes are to serve as white-box monitors of whether a model has genuinely internalized a preference---rather than learned to suppress outputs at the final layer---our results suggest that alignment pretraining makes such signals far more accessible.
+
+\paragraph{Limitations.}
+This is a toy setting: one layer, modular addition over a prime field, and a binary preference. The specific Fourier structures are particular to modular arithmetic and will not transfer directly. Real alignment involves richer preference structures, deeper architectures, and more complex training pipelines (RLHF, DPO, constitutional methods). Whether the shallow-vs-deep distinction we observe here has analogues at scale remains an open empirical question.
+
+\paragraph{Open questions.}
+Several questions remain: (1) How exactly does PT-G arrive at the correct answer for even inputs while suppressing odd ones---what is the gating circuit? (2) Does SFT produce similarly shallow patches in multi-layer models with richer task structure? (3) What is the appropriate spectral basis for analyzing models that operate over reduced output vocabularies, such as PT-G's even-residue subspace?
 
 \bibliographystyle{plainnat}
 \bibliography{references}

@@ -69,26 +69,33 @@ def eval_model(model, inputs, labels, loss_mask, is_even):
 # ---------------------------------------------------------------------------
 
 def get_fourier_basis(p, device):
-    """Orthonormal Fourier basis for Z_p (p must be odd)."""
-    assert p % 2 == 1, "Input should be odd"
+    """Orthonormal Fourier basis for Z_p (works for any p >= 2).
+
+    For odd p: 1 constant + (p-1)/2 cos/sin pairs = p vectors.
+    For even p: 1 constant + (p/2-1) cos/sin pairs + 1 Nyquist cos = p vectors.
+    (The Nyquist sine is identically zero and is omitted.)
+    """
     fourier_basis = [torch.ones(p) / np.sqrt(p)]
-    for i in range(1, p // 2 + 1):
+    max_freq = p // 2
+    for i in range(1, max_freq + 1):
         cos_vec = torch.cos(2 * torch.pi * torch.arange(p) * i / p)
-        sin_vec = torch.sin(2 * torch.pi * torch.arange(p) * i / p)
         cos_vec /= cos_vec.norm()
-        sin_vec /= sin_vec.norm()
         fourier_basis.append(cos_vec)
-        fourier_basis.append(sin_vec)
+        if i < max_freq or p % 2 == 1:
+            sin_vec = torch.sin(2 * torch.pi * torch.arange(p) * i / p)
+            sin_vec /= sin_vec.norm()
+            fourier_basis.append(sin_vec)
     return torch.stack(fourier_basis, dim=0).to(device)
 
 
 def get_fourier_basis_names(p):
     """Names for Fourier basis vectors: ['Const', 'cos 1', 'sin 1', ...]."""
-    assert p % 2 == 1, "Input should be odd"
     names = ['Const']
-    for i in range(1, p // 2 + 1):
+    max_freq = p // 2
+    for i in range(1, max_freq + 1):
         names.append(f'cos {i}')
-        names.append(f'sin {i}')
+        if i < max_freq or p % 2 == 1:
+            names.append(f'sin {i}')
     return names
 
 

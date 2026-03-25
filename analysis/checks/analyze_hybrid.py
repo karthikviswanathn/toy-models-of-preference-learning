@@ -81,19 +81,18 @@ def main():
         # Read config for split seed and params
         with open(pt_dir / "config.json") as f:
             cfg = json.load(f)
-        split_seed = cfg.get("split_seed", cfg.get("seed", 42))
+        data_seed = cfg.get("data_seed", cfg.get("split_seed", 42))
         train_frac = cfg["train_frac"]
         wd = cfg["weight_decay"]
         bs = cfg["batch_size"]
         ms = cfg.get("model_seed", 1234)
-        sh = cfg.get("shuffle_seed", 43)
 
         # Get SFT best test loss from its training history
         sft_history = torch.load(sft_dir / "history.pt", map_location="cpu", weights_only=False)
         sft_best_loss = min(sft_history["test_loss"])
 
         # Generate standard modular addition test data with matching split
-        rng = np.random.default_rng(split_seed)
+        rng = np.random.default_rng(data_seed)
         inputs, labels = generate_all_data(tokenizer, device=args.device)
         _, _, test_x, test_y = train_test_split(inputs, labels, train_frac, rng)
         test_m = torch.zeros(len(test_x), 5, device=args.device)
@@ -112,10 +111,10 @@ def main():
         hyb_loss, hyb_acc, hyb_even, hyb_odd = eval_model(hybrid, test_x, test_y, test_m, test_even)
 
         bs_str = "full" if bs <= 0 else str(bs)
-        print(f"{wd:>6} {bs_str:>6} {ms:>6} {split_seed:>4} {sh:>4} {sft_best_loss:>14.2e} {hyb_loss:>12.2e} {hyb_acc:>8.4f} {hyb_even:>8.4f} {hyb_odd:>8.4f}")
+        print(f"{wd:>6} {bs_str:>6} {ms:>6} {data_seed:>4} {sft_best_loss:>14.2e} {hyb_loss:>12.2e} {hyb_acc:>8.4f} {hyb_even:>8.4f} {hyb_odd:>8.4f}")
         rows.append({
             "weight_decay": wd, "batch_size": bs,
-            "model_seed": ms, "split_seed": split_seed, "shuffle_seed": sh,
+            "model_seed": ms, "data_seed": data_seed,
             "sft_best_test_loss": sft_best_loss,
             "hybrid_test_loss": hyb_loss, "hybrid_acc": hyb_acc,
             "hybrid_acc_even": hyb_even, "hybrid_acc_odd": hyb_odd,

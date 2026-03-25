@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Generate individual PNG figures for a given hyperparameter config.
 
-Saves to writeup/figs/wd{wd}_bs{bs}_ms{ms}_ss{ss}_sh{sh}/.
+Saves to writeup/figs/wd{wd}_bs{bs}_ms{ms}_ds{ds}/.
 
 Usage:
-    sbatch run_job.sh analysis/checks/generate_figs.py --wd 0.15 --bs 1024 --ms 1234 --ss 42 --sh 44
-    python analysis/checks/generate_figs.py --wd 0.15 --bs 1024 --ms 1234 --ss 42 --sh 44 --device cuda
+    sbatch run_job.sh analysis/checks/generate_figs.py --wd 0.15 --bs 1024 --ms 1234 --ds 42
+    python analysis/checks/generate_figs.py --wd 0.15 --bs 1024 --ms 1234 --ds 42 --device cuda
 """
 
 import argparse
@@ -28,7 +28,7 @@ from trainer.utils import get_fourier_basis, get_fourier_basis_names
 
 def find_model(variant_dir, pattern):
     """Find the model.pt matching a glob pattern under variant_dir."""
-    matches = sorted(PROJECT_ROOT.glob(f"outputs/runs/{variant_dir}/{pattern}/model.pt"))
+    matches = sorted(PROJECT_ROOT.glob(f"outputs/runs-p106/{variant_dir}/{pattern}/model.pt"))
     if not matches:
         raise FileNotFoundError(f"No model found for {variant_dir}/{pattern}")
     return matches[0]
@@ -43,7 +43,7 @@ def save_pca_stages(out_dir, a_pt, a_sft, a_ptg):
 
 def save_fourier_embedding(out_dir, a_pt, a_sft, a_ptg):
     """Fourier spectrum of W_E. PT+POST overplotted, PT-G separate."""
-    p = 113
+    p = a_pt.p
     names = get_fourier_basis_names(p)
     step = max(1, len(names) // 20)
     ticks = list(range(0, len(names), step))
@@ -87,7 +87,7 @@ def save_fourier_embedding(out_dir, a_pt, a_sft, a_ptg):
 
 def save_fourier_neuron_logit(out_dir, a_pt, a_sft, a_ptg):
     """Fourier spectrum of W_logit = W_out @ W_U, normalized and overplotted (2 panels)."""
-    p = 113
+    p = a_pt.p
     fb = get_fourier_basis(p, "cpu")
     names = get_fourier_basis_names(p)
     step = max(1, len(names) // 20)
@@ -196,12 +196,11 @@ def main():
     parser.add_argument("--wd", type=float, required=True, help="Weight decay")
     parser.add_argument("--bs", type=int, required=True, help="Batch size (-1 for full)")
     parser.add_argument("--ms", type=int, required=True, help="Model seed")
-    parser.add_argument("--ss", type=int, required=True, help="Split seed")
-    parser.add_argument("--sh", type=int, required=True, help="Shuffle seed")
+    parser.add_argument("--ds", type=int, required=True, help="Data seed")
     parser.add_argument("--device", type=str, default="cpu")
     args = parser.parse_args()
 
-    suffix = f"wd{args.wd}_bs{args.bs}_ms{args.ms}_ss{args.ss}_sh{args.sh}"
+    suffix = f"wd{args.wd}_bs{args.bs}_ms{args.ms}_ds{args.ds}"
     out_dir = PROJECT_ROOT / "writeup" / "figs" / suffix
     out_dir.mkdir(parents=True, exist_ok=True)
 

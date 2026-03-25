@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Research project investigating mechanistic differences between post-training alignment and preference-incorporated pretraining, using fully interpretable 1-layer transformers trained on modular addition (mod 113) with a parity-gated preference: models output correct answers for even results but suppress answers when results are odd.
+Research project investigating mechanistic differences between post-training alignment and preference-incorporated pretraining, using fully interpretable 1-layer transformers trained on modular addition (mod 106) with a parity-gated preference: models output correct answers for even results but suppress answers when results are odd.
 
 Three model variants are compared:
 - **PT**: Vanilla pretrain on standard modular addition (no preference knowledge)
@@ -55,13 +55,13 @@ Then import with `from trainer.X import ...` or `from analysis.X import ...`. Li
 
 ### trainer/
 
-- **tokenizer.py**: `ModularAdditionTokenizer` — vocab: 0..p-1, =, bos, eos, pad (117 tokens for p=113)
+- **tokenizer.py**: `ModularAdditionTokenizer` — vocab: 0..p-1, =, bos, eos, pad (110 tokens for p=106)
 - **model.py**: `create_model()` — `HookedTransformer` factory (from `transformer-lens` for built-in interpretability hooks). No LayerNorm, ReLU activation, matches Nanda et al.
 - **data.py**: `generate_all_data()`, `train_test_split()`, `generate_pretrain_data()` for standard modular addition
 - **config.py**: Dataclass configs (`ModelConfig`, `PretrainConfig`, `PretrainGatedConfig`, `SFTConfig`). CLI args override defaults via `argparse`. Serialized to `config.json` per run.
 - **utils.py**: Parity-gated data generation (`generate_parity_gated_data`), `split_data`, `eval_model` (loss + accuracy by parity), Fourier basis construction and 1D/2D transforms
 - **logger.py**: `WandbLogger` wrapper
-- **pretrain.py / pretrain_gated.py / sft.py**: Training entry points. AdamW + masked loss, W&B logging, save to `outputs/runs/<variant>_<params>_<job_id>/`
+- **pretrain.py / pretrain_gated.py / sft.py**: Training entry points. AdamW + masked loss, W&B logging, save to `outputs/runs-p106/<variant>_<params>_<job_id>/`
 
 ### analysis/
 
@@ -77,7 +77,7 @@ Then import with `from trainer.X import ...` or `from analysis.X import ...`. Li
 
 ### Canonical Models
 
-In `outputs/models/` — see `outputs/models/README.md` for full metadata. All use 1L4H architecture (d_model=128, d_mlp=512, p=113, train_frac=0.35).
+In `outputs/models/` — see `outputs/models/README.md` for full metadata. All use 1L4H architecture (d_model=128, d_mlp=512, p=106, train_frac=0.35).
 
 ### Key Activation Hooks
 

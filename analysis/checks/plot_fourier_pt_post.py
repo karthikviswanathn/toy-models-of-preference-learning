@@ -21,8 +21,14 @@ from analysis.analyzer import ModelAnalyzer, load_model
 device = "cuda"
 out_dir = PROJECT_ROOT / "writeup" / "figs"
 
-pt_model = load_model(PROJECT_ROOT / "outputs/runs/pt/pt_wd0.15_bs1024_ms1236_ss42_sh43_16927817/model.pt")
-post_model = load_model(PROJECT_ROOT / "outputs/runs/sft/sft_wd0.15_bs1024_ms1236_ss42_sh43_16929328/model.pt")
+def find_model(variant_dir, pattern):
+    matches = sorted(PROJECT_ROOT.glob(f"outputs/runs-p106/{variant_dir}/{pattern}/model.pt"))
+    if not matches:
+        raise FileNotFoundError(f"No model found for {variant_dir}/{pattern}")
+    return matches[0]
+
+pt_model = load_model(find_model("pt", "pt_wd0.15_bs1024_ms1236_ds42_*"))
+post_model = load_model(find_model("sft", "sft_wd0.15_bs1024_ms1236_ds42_*"))
 
 pt_a = ModelAnalyzer(pt_model, task="pt", device=device, label="PT")
 post_a = ModelAnalyzer(post_model, task="ptg", device=device, label="POST")

@@ -5,7 +5,7 @@ from dataclasses import dataclass, asdict
 
 @dataclass
 class ModelConfig:
-    p: int = 113
+    p: int = 106
     d_model: int = 128
     n_heads: int = 4
     n_layers: int = 1
@@ -16,8 +16,7 @@ class ModelConfig:
 
 @dataclass
 class DataConfig:
-    split_seed: int = 42   # controls train/test split
-    shuffle_seed: int = 43  # controls mini-batch shuffling
+    data_seed: int = 42   # single seed for splitting and shuffling
     train_frac: float = 0.3
     batch_size: int = 512  # -1 = full batch
 

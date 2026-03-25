@@ -2,8 +2,8 @@
 """Generate a PDF report with all analysis figures and tables for a given hyperparameter config.
 
 Usage:
-    sbatch run_job.sh analysis/checks/generate_report.py --wd 0.15 --bs 1024 --ms 1234 --ss 42 --sh 44
-    python analysis/checks/generate_report.py --wd 0.15 --bs 1024 --ms 1234 --ss 42 --sh 44 --device cuda
+    sbatch run_job.sh analysis/checks/generate_report.py --wd 0.15 --bs 1024 --ms 1234 --ds 42
+    python analysis/checks/generate_report.py --wd 0.15 --bs 1024 --ms 1234 --ds 42 --device cuda
 """
 
 import argparse
@@ -30,7 +30,7 @@ from trainer.utils import (
 
 def find_model(variant_dir, pattern):
     """Find the model.pt matching a glob pattern under variant_dir."""
-    matches = sorted(PROJECT_ROOT.glob(f"outputs/runs/{variant_dir}/{pattern}/model.pt"))
+    matches = sorted(PROJECT_ROOT.glob(f"outputs/runs-p106/{variant_dir}/{pattern}/model.pt"))
     if not matches:
         raise FileNotFoundError(f"No model found for {variant_dir}/{pattern}")
     return matches[0]
@@ -38,7 +38,7 @@ def find_model(variant_dir, pattern):
 
 def eval_table_page(pdf, a_pt, a_sft, a_ptg, device):
     """Page 1: Test performance table."""
-    tokenizer = ModularAdditionTokenizer(113)
+    tokenizer = ModularAdditionTokenizer(a_pt.p)
     seed = 42
     train_frac = 0.3
 
@@ -102,7 +102,7 @@ def pca_stages_page(pdf, a_pt, a_sft, a_ptg):
 
 def _fourier_spectrum_page(pdf, a_pt, a_sft, a_ptg, title_suffix, get_power_fn):
     """Fourier spectrum: 3 separate panels (PT, POST, PT-G), no shared y-axis."""
-    p = 113
+    p = a_pt.p
     names = get_fourier_basis_names(p)
     step = max(1, len(names) // 20)
     ticks = list(range(0, len(names), step))
@@ -139,7 +139,7 @@ def _fourier_spectrum_page(pdf, a_pt, a_sft, a_ptg, title_suffix, get_power_fn):
 
 def fourier_embedding_page(pdf, a_pt, a_sft, a_ptg):
     """Page 3: Fourier spectrum of W_E. PT+POST overplotted, PT-G separate."""
-    p = 113
+    p = a_pt.p
     names = get_fourier_basis_names(p)
     step = max(1, len(names) // 20)
     ticks = list(range(0, len(names), step))
@@ -181,7 +181,7 @@ def fourier_embedding_page(pdf, a_pt, a_sft, a_ptg):
 
 def neuron_logit_fourier_page(pdf, a_pt, a_sft, a_ptg):
     """Page 4: Fourier spectrum of W_logit."""
-    p = 113
+    p = a_pt.p
     fb = get_fourier_basis(p, "cpu")
 
     def get_power(analyzer):
@@ -208,13 +208,12 @@ def main():
     parser.add_argument("--wd", type=float, required=True, help="Weight decay")
     parser.add_argument("--bs", type=int, required=True, help="Batch size (-1 for full)")
     parser.add_argument("--ms", type=int, required=True, help="Model seed")
-    parser.add_argument("--ss", type=int, required=True, help="Split seed")
-    parser.add_argument("--sh", type=int, required=True, help="Shuffle seed")
+    parser.add_argument("--ds", type=int, required=True, help="Data seed")
     parser.add_argument("--device", type=str, default="cpu")
     parser.add_argument("--output", type=str, default=None, help="Output PDF path")
     args = parser.parse_args()
 
-    suffix = f"wd{args.wd}_bs{args.bs}_ms{args.ms}_ss{args.ss}_sh{args.sh}"
+    suffix = f"wd{args.wd}_bs{args.bs}_ms{args.ms}_ds{args.ds}"
 
     print(f"Config: {suffix}")
     print(f"Device: {args.device}")

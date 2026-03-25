@@ -2,7 +2,7 @@
 """Merge per-variant summary CSVs into a single merged_summary.csv.
 
 Joins pt/summary.csv, pt-g/summary.csv, sft/summary.csv, and hybrid_summary.csv
-on the shared key columns (weight_decay, batch_size, model_seed, split_seed, shuffle_seed).
+on the shared key columns (weight_decay, batch_size, model_seed, data_seed).
 
 Usage:
     python analysis/checks/merge_summaries.py
@@ -14,9 +14,9 @@ from pathlib import Path
 import pandas as pd
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-RUNS = PROJECT_ROOT / "outputs" / "runs"
+RUNS = PROJECT_ROOT / "outputs" / "runs-p106"
 
-KEYS = ["weight_decay", "batch_size", "model_seed", "split_seed", "shuffle_seed"]
+KEYS = ["weight_decay", "batch_size", "model_seed", "data_seed"]
 
 VARIANTS = [
     ("pt",  RUNS / "pt"  / "summary.csv"),

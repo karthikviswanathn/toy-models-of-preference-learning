@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Generate a grouped bar chart comparing linear vs PCA-augmented probe accuracy
-for the canonical model (wd=0.15, bs=1024, ms=1234, ss=42, sh=44).
+for the canonical model (wd=0.15, bs=1024, ms=1234, ds=42).
 
 Data is extracted from the modified_probes_sweep.csv (full sweep results).
 """
@@ -15,13 +15,14 @@ import matplotlib as mpl
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 # Canonical model data from modified_probes_sweep.csv
-# Columns: wd,bs,ms,ss,sh, then for each of 6 locations:
+# Columns: wd,bs,ms,ds, then for each of 6 locations:
 #   {loc}_{pt}, {loc}_{pt}_aug, {loc}_{post}, {loc}_{post}_aug, {loc}_{ptg}, {loc}_{ptg}_aug
-canonical_row = "0.15,1024,1234,42,44,0.4902,0.4832,0.4952,0.4954,0.4850,0.6763,0.4811,0.4779,0.4894,0.4855,0.6171,0.7940,0.4879,0.4842,0.4855,0.4853,0.6395,0.6996,0.4858,0.4960,0.4889,0.4931,0.4832,0.6434,0.4886,0.4910,0.4842,0.5038,0.8880,0.9982,0.5158,0.5513,0.5730,0.9616,0.9997,1.0000"
+# TODO: Regenerate this data after running sweep with p=106
+canonical_row = "0.15,1024,1234,42,0.4902,0.4832,0.4952,0.4954,0.4850,0.6763,0.4811,0.4779,0.4894,0.4855,0.6171,0.7940,0.4879,0.4842,0.4855,0.4853,0.6395,0.6996,0.4858,0.4960,0.4889,0.4931,0.4832,0.6434,0.4886,0.4910,0.4842,0.5038,0.8880,0.9982,0.5158,0.5513,0.5730,0.9616,0.9997,1.0000"
 
 vals = canonical_row.split(",")
-# Skip first 5 (keys), then groups of 6 per location
-data = [float(v) for v in vals[5:]]
+# Skip first 4 (keys), then groups of 6 per location
+data = [float(v) for v in vals[4:]]
 
 LOCATIONS = ["Head 0", "Head 1", "Head 2", "Head 3", "Post-Attn", "Post-MLP"]
 VARIANTS = ["PT", "POST", "PT-G"]

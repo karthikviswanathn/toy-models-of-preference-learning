@@ -8,7 +8,7 @@ For each model (PT, POST, PT-G), computes:
 
 Usage:
     python analysis/checks/skip_connection_ablation.py --device cuda \
-        --csv outputs/runs/skip_ablation.csv
+        --csv outputs/runs-p106/skip_ablation.csv
 """
 
 import argparse
@@ -27,7 +27,7 @@ from analysis.analyzer import ModelAnalyzer, load_model
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--device", default="cuda")
-    parser.add_argument("--csv", type=Path, default=PROJECT_ROOT / "outputs/runs/skip_ablation.csv")
+    parser.add_argument("--csv", type=Path, default=PROJECT_ROOT / "outputs/runs-p106/skip_ablation.csv")
     args = parser.parse_args()
 
     variants = [
@@ -38,7 +38,7 @@ def main():
 
     rows = []
     for variant_name, subdir, pattern, task in variants:
-        run_dirs = sorted(glob.glob(str(PROJECT_ROOT / f"outputs/runs/{subdir}/{pattern}/")))
+        run_dirs = sorted(glob.glob(str(PROJECT_ROOT / f"outputs/runs-p106/{subdir}/{pattern}/")))
         print(f"\n=== {variant_name}: {len(run_dirs)} runs ===")
 
         for run_dir in run_dirs:
@@ -54,14 +54,13 @@ def main():
             wd = cfg["weight_decay"]
             bs = cfg["batch_size"]
             ms = cfg.get("model_seed", 1234)
-            ss = cfg.get("split_seed", cfg.get("seed", 42))
-            sh = cfg.get("shuffle_seed", 43)
+            ds = cfg.get("data_seed", cfg.get("split_seed", 42))
 
             model = load_model(model_path)
             analyzer = ModelAnalyzer(model, task=task, device=args.device)
             result = analyzer.test_skip_connection_ablation()
 
-            print(f"  {variant_name} wd={wd} bs={bs} ms={ms} ss={ss} sh={sh} "
+            print(f"  {variant_name} wd={wd} bs={bs} ms={ms} ds={ds} "
                   f"orig_acc={result['original_acc']:.4f} "
                   f"zero_acc={result['zero_ablated_acc']:.4f} "
                   f"mean_acc={result['mean_ablated_acc']:.4f}")
@@ -71,8 +70,7 @@ def main():
                 "weight_decay": wd,
                 "batch_size": bs,
                 "model_seed": ms,
-                "split_seed": ss,
-                "shuffle_seed": sh,
+                "data_seed": ds,
                 "original_loss": result["original_loss"],
                 "original_acc": result["original_acc"],
                 "zero_ablated_loss": result["zero_ablated_loss"],

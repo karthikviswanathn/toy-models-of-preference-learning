@@ -15,7 +15,7 @@ from .tokenizer import ModularAdditionTokenizer
 
 
 def create_model(
-    p: int = 113,
+    p: int = 106,
     d_model: int = 128,
     n_heads: int = 4,
     n_layers: int = 1,
@@ -30,7 +30,7 @@ def create_model(
     Uses full vocab from tokenizer (p + 4: numbers, =, <bos>, <eos>, <pad>).
 
     Args:
-        p: Prime modulus
+        p: Modulus
         d_model: Model dimension
         n_heads: Number of attention heads
         n_layers: Number of transformer layers

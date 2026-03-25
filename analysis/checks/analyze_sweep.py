@@ -3,8 +3,8 @@
 
 Usage:
     python analysis/analyze_sweep.py \
-        outputs/runs/pt-g/ptg_wd0.3_bs256_... \
-        outputs/runs/pt-g/ptg_wd0.5_bs512_... \
+        outputs/runs-p106/pt-g/ptg_wd0.3_bs256_... \
+        outputs/runs-p106/pt-g/ptg_wd0.5_bs512_... \
         ...
         --filename pca_top_ptg.png
 """
@@ -56,9 +56,9 @@ def main():
         bs = cfg["batch_size"]
         variant = cfg.get("variant", "PT-G")
         train_frac = cfg["train_frac"]
-        split_seed = cfg.get("split_seed", cfg.get("seed", 42))
+        data_seed = cfg.get("data_seed", cfg.get("split_seed", 42))
 
-        rng = np.random.default_rng(split_seed)
+        rng = np.random.default_rng(data_seed)
         if variant == "PT":
             inputs, labels = generate_all_data(tokenizer, device=args.device)
             _, _, test_x, test_y = train_test_split(inputs, labels, train_frac, rng)

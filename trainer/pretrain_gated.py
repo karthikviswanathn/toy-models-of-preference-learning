@@ -27,7 +27,7 @@ class PretrainGatedTrainer(BaseTrainer):
         all_inputs, all_labels, all_masks, all_even = generate_parity_gated_data(tokenizer, device)
         tr_x, tr_y, tr_m, _, te_x, te_y, te_m, _ = split_data(
             all_inputs, all_labels, all_masks, all_even,
-            dc.train_frac, self.split_rng
+            dc.train_frac, self.data_rng
         )
         return TrainTestData(tr_x, tr_y, tr_m, te_x, te_y, te_m)
 
@@ -38,7 +38,7 @@ class PretrainGatedTrainer(BaseTrainer):
         )
 
     def run_dir_prefix(self, mc, dc, tc):
-        return f"pt-g/ptg_wd{tc.weight_decay}_bs{dc.batch_size}_ms{mc.model_seed}_ss{dc.split_seed}_sh{dc.shuffle_seed}"
+        return f"pt-g/ptg_wd{tc.weight_decay}_bs{dc.batch_size}_ms{mc.model_seed}_ds{dc.data_seed}"
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@ Probes predict even/odd parity from activations at the = token position.
 Saves results as CSV and prints a table to stdout.
 
 Usage (single config):
-    sbatch run_job.sh analysis/checks/parity_probes.py --wd 0.15 --bs 1024 --ms 1234 --ss 42 --sh 44 --device cuda
+    sbatch run_job.sh analysis/checks/parity_probes.py --wd 0.15 --bs 1024 --ms 1234 --ds 42 --device cuda
 
 Usage (sweep over all 126 configs):
     sbatch run_job.sh analysis/checks/parity_probes.py --sweep --device cuda
@@ -23,13 +23,14 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from analysis.analyzer import ModelAnalyzer, load_model
+from trainer.config import ModelConfig
 
 LOCATIONS = ["Head 0", "Head 1", "Head 2", "Head 3", "Post-Attn", "Post-MLP"]
-KEYS = ["weight_decay", "batch_size", "model_seed", "split_seed", "shuffle_seed"]
+KEYS = ["weight_decay", "batch_size", "model_seed", "data_seed"]
 
 
 def find_model(variant_dir, pattern):
-    matches = sorted(PROJECT_ROOT.glob(f"outputs/runs/{variant_dir}/{pattern}/model.pt"))
+    matches = sorted(PROJECT_ROOT.glob(f"outputs/runs-p106/{variant_dir}/{pattern}/model.pt"))
     if not matches:
         return None
     return matches[0]
@@ -80,7 +81,7 @@ def extract_and_probe(analyzer, p, d_model, n_heads, d_head):
 
 def probe_single(args):
     """Run probes for a single hyperparameter config."""
-    suffix = f"wd{args.wd}_bs{args.bs}_ms{args.ms}_ss{args.ss}_sh{args.sh}"
+    suffix = f"wd{args.wd}_bs{args.bs}_ms{args.ms}_ds{args.ds}"
     out_dir = PROJECT_ROOT / "writeup" / "figs" / suffix
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -99,7 +100,7 @@ def probe_single(args):
     a_sft = ModelAnalyzer(load_model(sft_path), task="ptg", device=args.device, label="POST")
     a_ptg = ModelAnalyzer(load_model(ptg_path), task="ptg", device=args.device, label="PT-G")
 
-    p = 113
+    p = a_pt.p
     d_model = a_pt.model.cfg.d_model
     n_heads = a_pt.model.cfg.n_heads
     d_head = d_model // n_heads
@@ -133,7 +134,7 @@ def probe_single(args):
 def probe_sweep(device):
     """Run probes across all 126 sweep configs and save a single CSV."""
     # Read configs from PT summary
-    summary_path = PROJECT_ROOT / "outputs" / "runs" / "pt" / "summary.csv"
+    summary_path = PROJECT_ROOT / "outputs" / "runs-p106" / "pt" / "summary.csv"
     import pandas as pd
     df = pd.read_csv(summary_path)
     configs = df[KEYS].values
@@ -141,8 +142,8 @@ def probe_sweep(device):
     print(f"Found {n_configs} configs from {summary_path}")
     print(f"Device: {device}")
 
-    p = 113
-    # Columns: 5 keys + 6 locations x 3 variants = 23 columns
+    p = ModelConfig().p
+    # Columns: 4 keys + 6 locations x 3 variants = 22 columns
     variants = ["pt", "post", "ptg"]
     loc_cols = []
     for loc in LOCATIONS:
@@ -150,15 +151,15 @@ def probe_sweep(device):
         for var in variants:
             loc_cols.append(f"{loc_tag}_{var}")
 
-    out_path = PROJECT_ROOT / "outputs" / "runs" / "parity_probes_sweep.csv"
+    out_path = PROJECT_ROOT / "outputs" / "runs-p106" / "parity_probes_sweep.csv"
     # Write header
     with open(out_path, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(KEYS + loc_cols)
 
-    for i, (wd, bs, ms, ss, sh) in enumerate(configs):
-        bs = int(bs); ms = int(ms); ss = int(ss); sh = int(sh)
-        suffix = f"wd{wd}_bs{bs}_ms{ms}_ss{ss}_sh{sh}"
+    for i, (wd, bs, ms, ds) in enumerate(configs):
+        bs = int(bs); ms = int(ms); ds = int(ds)
+        suffix = f"wd{wd}_bs{bs}_ms{ms}_ds{ds}"
         print(f"\n[{i+1}/{n_configs}] {suffix}")
 
         pt_path = find_model("pt", f"pt_{suffix}_*")
@@ -169,7 +170,7 @@ def probe_sweep(device):
             print(f"  SKIP — missing model(s)")
             continue
 
-        row = [wd, bs, ms, ss, sh]
+        row = [wd, bs, ms, ds]
         for variant, path, task in [("PT", pt_path, "pt"), ("POST", sft_path, "ptg"), ("PT-G", ptg_path, "ptg")]:
             model = load_model(path)
             analyzer = ModelAnalyzer(model, task=task, device=device, label=variant)
@@ -209,16 +210,15 @@ def main():
     parser.add_argument("--wd", type=float)
     parser.add_argument("--bs", type=int)
     parser.add_argument("--ms", type=int)
-    parser.add_argument("--ss", type=int)
-    parser.add_argument("--sh", type=int)
+    parser.add_argument("--ds", type=int)
     parser.add_argument("--device", type=str, default="cpu")
     args = parser.parse_args()
 
     if args.sweep:
         probe_sweep(args.device)
     else:
-        if not all([args.wd, args.bs, args.ms, args.ss, args.sh]):
-            parser.error("Provide --wd --bs --ms --ss --sh, or use --sweep")
+        if not all([args.wd, args.bs, args.ms, args.ds]):
+            parser.error("Provide --wd --bs --ms --ds, or use --sweep")
         probe_single(args)
 
 

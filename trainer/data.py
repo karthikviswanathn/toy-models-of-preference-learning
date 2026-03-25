@@ -102,11 +102,11 @@ def generate_pretrain_data(
         train_inputs, train_labels, test_inputs, test_labels
 
     Example:
-        >>> tokenizer = ModularAdditionTokenizer(113)
+        >>> tokenizer = ModularAdditionTokenizer(106)
         >>> rng = np.random.default_rng(42)
         >>> train_x, train_y, test_x, test_y = generate_pretrain_data(tokenizer, 0.3, rng)
-        >>> train_x.shape  # (3831, 6) for 30% of 113^2
-        >>> train_y.shape  # (3831,)
+        >>> train_x.shape  # (3370, 6) for 30% of 106^2
+        >>> train_y.shape  # (3370,)
     """
     inputs, labels = generate_all_data(tokenizer, device)
     return train_test_split(inputs, labels, train_frac, rng)

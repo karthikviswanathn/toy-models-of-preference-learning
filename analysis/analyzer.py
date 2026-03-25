@@ -113,7 +113,7 @@ class ModelAnalyzer:
         model: A HookedTransformer instance.
         task: "pt" (vanilla pretrain) or "ptg" (parity-gated pretrain).
         device: Device for computation.
-        p: Prime modulus (defaults to ModelConfig().p).
+        p: Modulus (defaults to ModelConfig().p).
         label: Human-readable label for plots.
     """
 

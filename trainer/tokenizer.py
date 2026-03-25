@@ -20,10 +20,10 @@ class ModularAdditionTokenizer:
 
     def __init__(self, p: int):
         """
-        Initialize tokenizer with prime modulus p.
+        Initialize tokenizer with modulus p.
 
         Args:
-            p: Prime modulus. Numbers 0..p-1 are valid tokens.
+            p: Modulus. Numbers 0..p-1 are valid tokens.
         """
         self.p = p
 

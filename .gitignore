@@ -2,6 +2,7 @@
 __pycache__/
 outputs/logs/
 outputs/runs/
+outputs/runs-p106/
 outputs/runs-old/
 outputs/runs-duplicate/
 outputs/models/
@@ -9,4 +10,3 @@ wandb/
 .ipynb_checkpoints/
 writeup/build
 .ai-code/
-poster/build

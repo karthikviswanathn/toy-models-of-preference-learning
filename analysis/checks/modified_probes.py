@@ -26,11 +26,11 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from analysis.analyzer import ModelAnalyzer, load_model
 
 LOCATIONS = ["Head 0", "Head 1", "Head 2", "Head 3", "Post-Attn", "Post-MLP"]
-KEYS = ["weight_decay", "batch_size", "model_seed", "split_seed", "shuffle_seed"]
+KEYS = ["weight_decay", "batch_size", "model_seed", "data_seed"]
 
 
 def find_model(variant_dir, pattern):
-    matches = sorted(PROJECT_ROOT.glob(f"outputs/runs/{variant_dir}/{pattern}/model.pt"))
+    matches = sorted(PROJECT_ROOT.glob(f"outputs/runs-p106/{variant_dir}/{pattern}/model.pt"))
     if not matches:
         return None
     return matches[0]
@@ -62,7 +62,7 @@ def augment_with_squared_pcs(X, n_pcs=10):
 
 def extract_activations(analyzer):
     """Extract activations at 6 locations, return dict."""
-    p = 113
+    p = analyzer.p
     eq_pos = 3
     d_model = analyzer.model.cfg.d_model
     n_heads = analyzer.model.cfg.n_heads
@@ -99,7 +99,7 @@ def probe_model(analyzer, n_pcs):
 
 def run_single(args):
     """Run on canonical config, print table."""
-    suffix = "wd0.15_bs1024_ms1234_ss42_sh44"
+    suffix = "wd0.15_bs1024_ms1234_ds42"
     print(f"Config: {suffix}")
     print(f"Device: {args.device}")
     print(f"Squared PCs: {args.n_pcs}")
@@ -125,7 +125,7 @@ def run_single(args):
 def run_sweep(args):
     """Run across all 126 configs, save CSV."""
     import pandas as pd
-    summary_path = PROJECT_ROOT / "outputs" / "runs" / "pt" / "summary.csv"
+    summary_path = PROJECT_ROOT / "outputs" / "runs-p106" / "pt" / "summary.csv"
     df = pd.read_csv(summary_path)
     configs = df[KEYS].values
     n_configs = len(configs)
@@ -141,13 +141,13 @@ def run_sweep(args):
             col_names.append(f"{loc_tag}_{var}")
             col_names.append(f"{loc_tag}_{var}_aug")
 
-    out_path = PROJECT_ROOT / "outputs" / "runs" / "modified_probes_sweep.csv"
+    out_path = PROJECT_ROOT / "outputs" / "runs-p106" / "modified_probes_sweep.csv"
     with open(out_path, "w", newline="") as f:
         csv.writer(f).writerow(KEYS + col_names)
 
-    for i, (wd, bs, ms, ss, sh) in enumerate(configs):
-        bs = int(bs); ms = int(ms); ss = int(ss); sh = int(sh)
-        suffix = f"wd{wd}_bs{bs}_ms{ms}_ss{ss}_sh{sh}"
+    for i, (wd, bs, ms, ds) in enumerate(configs):
+        bs = int(bs); ms = int(ms); ds = int(ds)
+        suffix = f"wd{wd}_bs{bs}_ms{ms}_ds{ds}"
         print(f"\n[{i+1}/{n_configs}] {suffix}")
 
         pt_path = find_model("pt", f"pt_{suffix}_*")
@@ -158,7 +158,7 @@ def run_sweep(args):
             print(f"  SKIP — missing model(s)")
             continue
 
-        row = [wd, bs, ms, ss, sh]
+        row = [wd, bs, ms, ds]
         all_results = {}
         for variant, path, task in [("pt", pt_path, "pt"), ("post", sft_path, "ptg"), ("ptg", ptg_path, "ptg")]:
             analyzer = ModelAnalyzer(load_model(path), task=task, device=args.device, label=variant)

@@ -71,8 +71,7 @@ class BaseTrainer:
         parser.add_argument("--lr", type=float, default=None)
         parser.add_argument("--epochs", type=int, default=None)
         parser.add_argument("--model_seed", type=int, default=None)
-        parser.add_argument("--split_seed", type=int, default=None)
-        parser.add_argument("--shuffle_seed", type=int, default=None)
+        parser.add_argument("--data_seed", type=int, default=None)
 
     def apply_args(self, args, mc, dc, tc):
         """Apply parsed CLI args to configs. Call super().apply_args(...) first."""
@@ -88,10 +87,8 @@ class BaseTrainer:
             tc.epochs = args.epochs
         if args.model_seed is not None:
             mc.model_seed = args.model_seed
-        if args.split_seed is not None:
-            dc.split_seed = args.split_seed
-        if args.shuffle_seed is not None:
-            dc.shuffle_seed = args.shuffle_seed
+        if args.data_seed is not None:
+            dc.data_seed = args.data_seed
 
     def before_training(self):
         """Hook called after setup, before the training loop."""
@@ -116,7 +113,7 @@ class BaseTrainer:
         mc, dc, tc = self.mc, self.dc, self.tc
 
         job_id = os.environ.get("SLURM_JOB_ID", "local")
-        self.run_dir = PROJECT_ROOT / "outputs" / "runs" / f"{self.run_dir_prefix(mc, dc, tc)}_{job_id}"
+        self.run_dir = PROJECT_ROOT / "outputs" / "runs-p106" / f"{self.run_dir_prefix(mc, dc, tc)}_{job_id}"
         self.run_dir.mkdir(parents=True, exist_ok=True)
 
         print(f"Device: {DEVICE}")
@@ -124,8 +121,7 @@ class BaseTrainer:
         print(f"Run dir: {self.run_dir}")
 
         self.tokenizer = ModularAdditionTokenizer(mc.p)
-        self.split_rng = np.random.default_rng(dc.split_seed)
-        self.shuffle_rng = np.random.default_rng(dc.shuffle_seed)
+        self.data_rng = np.random.default_rng(dc.data_seed)
         self.data = self.setup_data(mc, dc, self.tokenizer, DEVICE)
         self.model = self.setup_model(mc, dc, tc, DEVICE)
 
@@ -182,7 +178,7 @@ class BaseTrainer:
         bs = self.batch_size
 
         if bs < n_train:
-            perm = torch.tensor(self.shuffle_rng.permutation(n_train), device=data.train_x.device)
+            perm = torch.tensor(self.data_rng.permutation(n_train), device=data.train_x.device)
             data.train_x = data.train_x[perm]
             data.train_y = data.train_y[perm]
             data.train_mask = data.train_mask[perm]

@@ -13,7 +13,7 @@ import numpy as np
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 def main():
-    with open(PROJECT_ROOT / "outputs/runs/hybrid_summary.csv") as f:
+    with open(PROJECT_ROOT / "outputs/runs-p106/hybrid_summary.csv") as f:
         rows = list(csv.DictReader(f))
 
     accs = np.array(sorted([float(r["hybrid_acc"]) for r in rows], reverse=True))

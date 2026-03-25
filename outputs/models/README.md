@@ -1,6 +1,6 @@
 # Canonical Models
 
-PT-G runs with best test loss < 1e-5. All use 1L4H architecture (d_model=128, d_mlp=512, p=113, train_frac=0.3).
+PT-G runs with best test loss < 1e-5. All use 1L4H architecture (d_model=128, d_mlp=512, p=106, train_frac=0.3).
 
 | Best test loss | wd  | bs   | Model path |
 |---------------|-----|------|------------|

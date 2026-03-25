@@ -2,10 +2,10 @@
 
 ## Problem Setup
 
-We train a 1-layer, 4-head transformer (d_model=128, d_mlp=512) on **parity-gated modular addition** mod p=113:
+We train a 1-layer, 4-head transformer (d_model=128, d_mlp=512) on **parity-gated modular addition** mod p=106:
 
-- **Even result** `(a+b) % 113` is even: model outputs the correct answer `c = (a+b) % 113`
-- **Odd result** `(a+b) % 113` is odd: model outputs `<eos>` (answer suppressed)
+- **Even result** `(a+b) % 106` is even: model outputs the correct answer `c = (a+b) % 106`
+- **Odd result** `(a+b) % 106` is odd: model outputs `<eos>` (answer suppressed)
 
 The model (PT-G, wd=0.5) achieves near-perfect test accuracy on both cases. We analyze how the Fourier mechanism implements this dual behavior.
 
@@ -30,7 +30,7 @@ sin(k1 a) cos(k2 b) = 1/2 [sin(k1 a + k2 b) + sin(k1 a - k2 b)]
 cos(k1 a) sin(k2 b) = 1/2 [sin(k1 a + k2 b) - sin(k1 a - k2 b)]
 ```
 
-All trig arguments are implicitly multiplied by `2pi/113`. Coefficients are properly normalized to account for the orthonormal Fourier basis (Const = 1/sqrt(p), cos_k/sin_k = sqrt(2/p) * cos/sin).
+All trig arguments are implicitly multiplied by `2pi/106`. Coefficients are properly normalized to account for the orthonormal Fourier basis (Const = 1/sqrt(p), cos_k/sin_k = sqrt(2/p) * cos/sin).
 
 ### Table 1: Average across number tokens (centered, no DC)
 
@@ -254,5 +254,5 @@ The decomposition shows that `sin(56(a+b))` is the overwhelmingly dominant compo
 
 - Architecture: 1-layer, 4-head transformer (HookedTransformer from transformer_lens)
 - d_model=128, d_mlp=512, ReLU activation, no LayerNorm
-- p=113, train_frac=0.3, weight_decay=0.5, lr=1e-3, 50k epochs
+- p=106, train_frac=0.3, weight_decay=0.5, lr=1e-3, 50k epochs
 - Checkpoint: `outputs/models/pt-g.pt` (from run `ptg_1L4H_d128_lr0.001_wd0.5_tf0.3_16428989`, best test loss 5.78e-06)

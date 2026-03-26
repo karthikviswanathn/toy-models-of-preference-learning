@@ -1,9 +1,9 @@
 #!/bin/bash
 # Sweep PT: wd × bs × model_seed × data_seed
-# 3 × 4 × 3 × 3 = 108 jobs
+# 3 × 3 × 3 × 3 = 81 jobs
 
 WEIGHT_DECAYS=(0.15 0.3 0.5)
-BATCH_SIZES=(256 512 1024 -1)
+BATCH_SIZES=(512 1024 -1)
 MODEL_SEEDS=(1234 1235 1236)
 DATA_SEEDS=(42 43 44)
 
@@ -14,7 +14,7 @@ for bs in "${BATCH_SIZES[@]}"; do
 for ms in "${MODEL_SEEDS[@]}"; do
 for ds in "${DATA_SEEDS[@]}"; do
 
-    sbatch --export=ALL,WANDB_PROJECT=toy-preference-sweep-pt \
+    sbatch --export=ALL,WANDB_PROJECT=toy-preference-sweep-pt-p106 \
            --job-name="pt-wd${wd}-bs${bs}-ms${ms}-ds${ds}" \
            run_job.sh trainer/pretrain.py \
            --weight_decay "$wd" \

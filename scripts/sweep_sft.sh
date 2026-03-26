@@ -1,10 +1,10 @@
 #!/bin/bash
 # Sweep SFT using matching PT models as base.
 # Run this AFTER sweep_pt.sh PT jobs have completed.
-# 3 × 4 × 3 × 3 = 108 jobs
+# 3 × 3 × 3 × 3 = 81 jobs
 
 WEIGHT_DECAYS=(0.15 0.3 0.5)
-BATCH_SIZES=(256 512 1024 -1)
+BATCH_SIZES=(512 1024 -1)
 MODEL_SEEDS=(1234 1235 1236)
 DATA_SEEDS=(42 43 44)
 
@@ -24,7 +24,7 @@ for ds in "${DATA_SEEDS[@]}"; do
         continue
     fi
 
-    sbatch --export=ALL,WANDB_PROJECT=toy-preference-sweep-sft \
+    sbatch --export=ALL,WANDB_PROJECT=toy-preference-sweep-sft-p106 \
            --job-name="sft-wd${wd}-bs${bs}-ms${ms}-ds${ds}" \
            run_job.sh trainer/sft.py \
            --base_model "${PT_DIR}/model.pt" \

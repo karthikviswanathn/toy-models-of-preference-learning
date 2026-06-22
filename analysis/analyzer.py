@@ -66,11 +66,24 @@ def load_model(path: str | Path) -> HookedTransformer:
     return model
 
 
-def generate_preference_gated_inputs(tokenizer: ModularAdditionTokenizer, device: str = "cpu", unsafe_threshold: int = 57):
-    """Generate all p^2 preference-gated inputs, returning (inputs, result_labels)."""
-    inputs, labels, _, is_preferred = generate_preference_gated_data(tokenizer, device=device, unsafe_threshold=unsafe_threshold)
+def generate_preference_gated_inputs(tokenizer: ModularAdditionTokenizer, device: str = "cpu", unsafe_threshold: int = 57, d_vocab: int | None = None):
+    """Generate all p^2 preference-gated inputs, returning (inputs, result_labels).
+
+    If d_vocab is provided and is smaller than the tokenizer's vocab_size
+    (e.g. models trained before the U token was added), falls back to
+    standard modular-addition inputs so every token stays in-bounds.
+    Analysis at the '=' position (pos 3) is unaffected because causal
+    attention only sees positions 0-3.
+    """
     p = tokenizer.p
     result_labels = np.array([(a + b) % p for a in range(p) for b in range(p)])
+
+    if d_vocab is not None and d_vocab < tokenizer.vocab_size:
+        # Old-format model: use standard inputs (all tokens < d_vocab)
+        inputs, _ = generate_all_data(tokenizer, device=device)
+        return inputs, result_labels
+
+    inputs, labels, _, is_preferred = generate_preference_gated_data(tokenizer, device=device, unsafe_threshold=unsafe_threshold)
     return inputs, result_labels
 
 
@@ -147,7 +160,8 @@ class ModelAnalyzer:
 
         if task == "ptg":
             self.all_inputs, self.result_labels = generate_preference_gated_inputs(
-                self.tokenizer, "cpu", unsafe_threshold=self.unsafe_threshold
+                self.tokenizer, "cpu", unsafe_threshold=self.unsafe_threshold,
+                d_vocab=model.cfg.d_vocab,
             )
         else:  # task == "pt"
             inputs, labels = generate_all_data(self.tokenizer, device="cpu")

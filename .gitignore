@@ -1,3 +1,6 @@
 *.pyc
 outputs/logs/
 outputs/runs/
+.ai-code
+run_job.sh
+allocate_node.sh

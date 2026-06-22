@@ -41,31 +41,38 @@ def main():
     mc = ModelConfig()
     dc = DataConfig()
     tokenizer = ModularAdditionTokenizer(mc.p)
-    all_inputs, result_labels = generate_preference_gated_inputs(tokenizer, "cpu", unsafe_threshold=dc.unsafe_threshold)
-    print(f"Generated {len(all_inputs)} inputs (p={mc.p})")
 
-    # Prepare test split for computing loss
-    inputs, labels, loss_mask, is_preferred = generate_preference_gated_data(tokenizer, device=args.device, unsafe_threshold=dc.unsafe_threshold)
-    with open(args.runs[0] / "config.json") as f:
-        train_frac = json.load(f)["train_frac"]
-    rng = np.random.default_rng(dc.seed)
-    _, _, _, _, test_x, test_y, test_m, test_preferred = split_data(
-        inputs, labels, loss_mask, is_preferred, train_frac, rng,
+    # Detect vocab size from first model to handle old-format (no U token) models
+    first_model = load_model(args.runs[0] / "model.pt")
+    d_vocab = first_model.cfg.d_vocab
+
+    all_inputs, result_labels = generate_preference_gated_inputs(
+        tokenizer, "cpu", unsafe_threshold=dc.unsafe_threshold, d_vocab=d_vocab,
     )
+    print(f"Generated {len(all_inputs)} inputs (p={mc.p}, d_vocab={d_vocab})")
 
     # Load metadata and activations for each run
     entries = []
     for run_dir in args.runs:
         with open(run_dir / "config.json") as f:
-            wd = json.load(f)["weight_decay"]
+            cfg = json.load(f)
+        wd = cfg["weight_decay"]
+        ms = cfg.get("model_seed", "?")
+        ds = cfg.get("seed", "?")
+        history_path = run_dir / "history.pt"
+        if history_path.exists():
+            h = torch.load(history_path, map_location="cpu", weights_only=False)
+            best_loss = min(h["test_loss"])
+        else:
+            best_loss = float("inf")
+        label = f"wd={wd}\nms={ms} ds={ds}\nloss={best_loss:.2e}"
         model = load_model(run_dir / "model.pt")
         model.to(args.device)
-        test_loss, test_acc, _, _ = eval_model(model, test_x, test_y, test_m, test_preferred)
-        print(f"  wd={wd}, test_loss={test_loss:.4f}, test_acc={test_acc:.4f}, arch={model.cfg.n_layers}L{model.cfg.n_heads}H")
+        print(f"  wd={wd}, ms={ms}, ds={ds}, best_loss={best_loss:.2e}, arch={model.cfg.n_layers}L{model.cfg.n_heads}H")
         activations = extract_stage_activations(model, all_inputs, args.device)
-        entries.append((wd, test_loss, activations))
+        entries.append((best_loss, label, activations))
 
-    # Sort by weight decay
+    # Sort by best test loss (lowest first = leftmost)
     entries.sort(key=lambda e: e[0])
 
     # Plot: rows = stages, columns = weight decay values
@@ -78,7 +85,7 @@ def main():
     fig, axes = plt.subplots(nrows, ncols, figsize=(3.5 * ncols, 3.5 * nrows + 0.8),
                              squeeze=False)
 
-    for col_idx, (wd, test_loss, activations) in enumerate(entries):
+    for col_idx, (wd, col_label, activations) in enumerate(entries):
         for row_idx, row_label in enumerate(row_labels):
             ax = axes[row_idx, col_idx]
             data = activations[row_label]
@@ -95,11 +102,7 @@ def main():
             ax.locator_params(axis="both", nbins=5)
 
             if row_idx == 0:
-                if test_loss < 1e-4:
-                    loss_str = f"{test_loss:.2e}"
-                else:
-                    loss_str = f"{test_loss:.4f}"
-                ax.set_title(f"wd={wd}\n(loss={loss_str})", fontsize=10, fontweight="bold", pad=8)
+                ax.set_title(col_label, fontsize=10, fontweight="bold", pad=8)
 
             var = pca.explained_variance_ratio_ * 100
             ax.set_xlabel(f"PC1 ({var[0]:.1f}%)", fontsize=11)

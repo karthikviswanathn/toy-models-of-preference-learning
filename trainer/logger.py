@@ -38,7 +38,7 @@ class WandbLogger:
             config.update(extra_config)
 
         job_id = os.environ.get("SLURM_JOB_ID", "local")
-        run_name = f"{variant}_{mc.n_layers}L{mc.n_heads}H_wd{tc.weight_decay}_tf{dc.train_frac}_{job_id}"
+        run_name = f"{variant}_{mc.n_layers}L{mc.n_heads}H_wd{tc.weight_decay}_tf{dc.train_frac}_ds{dc.seed}_ms{mc.model_seed}_{job_id}"
 
         wandb.init(
             project=WANDB_PROJECT,
